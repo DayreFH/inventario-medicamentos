@@ -1,0 +1,23 @@
+{
+  "name": "inventario-backend",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "prisma:studio": "prisma studio"
+  },
+  "devDependencies": {
+    "prisma": "^6.14.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.14.0",
+    "axios": "^1.12.2",
+    "cheerio": "^1.1.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "node-cron": "^4.2.1",
+    "puppeteer": "^24.20.0",
+    "zod": "^4.0.17"
+  }
+}
