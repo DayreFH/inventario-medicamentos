@@ -9,6 +9,7 @@ import Sales from './pages/Sales';
 import ExchangeRates from './pages/ExchangeRates';
 import ExchangeRatesMN from './pages/ExchangeRatesMN';
 import ShippingRates from './pages/ShippingRates';
+import UtilityRates from './pages/UtilityRates';
 
 export default function App() {
   return (
@@ -34,11 +35,13 @@ export default function App() {
             {/* PANEL DE DATOS */}
             <Route path="/" element={<Dashboard/>}/>
             <Route path="/top-customers" element={<Dashboard/>}/>
+            <Route path="/best-prices" element={<Dashboard/>}/>
             
             {/* ADMINISTRACIÓN */}
             <Route path="/admin/dop-usd" element={<ExchangeRates/>}/>
             <Route path="/admin/usd-mn" element={<ExchangeRatesMN/>}/>
             <Route path="/admin/shipping" element={<ShippingRates/>}/>
+            <Route path="/admin/utility" element={<UtilityRates/>}/>
             
             {/* GESTIÓN DE DATOS */}
             <Route path="/medicines" element={<Medicines/>}/>

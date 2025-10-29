@@ -44,6 +44,98 @@ const ReceiptFormAdvanced = () => {
     loadInitialData();
   }, []);
 
+  // Efecto separado para pre-selección cuando los datos están cargados
+  useEffect(() => {
+    // Solo ejecutar si hay datos y hay parámetros en la URL
+    if (medicines.length > 0 && suppliers.length > 0) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const medicineId = urlParams.get('medicineId');
+      const supplierId = urlParams.get('supplierId');
+      const priceId = urlParams.get('priceId');
+      
+      if (medicineId || supplierId || priceId) {
+        // Usar un flag para evitar ejecutar múltiples veces
+        const hasPreselected = sessionStorage.getItem('urlPreselected');
+        if (!hasPreselected) {
+          sessionStorage.setItem('urlPreselected', 'true');
+          setTimeout(() => {
+            handleUrlPreselection(medicineId, supplierId, priceId);
+          }, 300);
+        }
+      }
+    }
+  }, [medicines, suppliers]);
+
+  const handleUrlPreselection = async (medicineId, supplierId, priceId) => {
+    try {
+      // Pre-seleccionar medicamento
+      if (medicineId) {
+        let medicine = medicines.find(m => m.id === parseInt(medicineId));
+        
+        // Si no está en la lista, cargarlo específicamente
+        if (!medicine) {
+          const { data } = await api.get(`/medicines/${medicineId}`);
+          if (data) {
+            medicine = data;
+            // Agregar a la lista si no está
+            if (!medicines.find(m => m.id === data.id)) {
+              setMedicines([...medicines, data]);
+            }
+          }
+        }
+        
+        if (medicine) {
+          await handleMedicineSelect(medicine);
+          
+          // Esperar un momento para que se carguen los precios
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Pre-seleccionar proveedor
+          if (supplierId) {
+            const supplier = suppliers.find(s => s.id === parseInt(supplierId));
+            if (supplier) {
+              await handleSupplierSelect(supplier);
+              
+              // Esperar un momento para que se filtren los precios
+              await new Promise(resolve => setTimeout(resolve, 300));
+              
+              // Pre-seleccionar precio
+              if (priceId) {
+                const price = medicinePrices.find(p => p.id === parseInt(priceId));
+                if (price) {
+                  handlePriceSelect(price);
+                } else {
+                  // Intentar buscar en los precios del medicamento si no está en la lista filtrada
+                  const allPrices = medicine.precios || [];
+                  const priceFromMedicine = allPrices.find(p => p.id === parseInt(priceId));
+                  if (priceFromMedicine) {
+                    handlePriceSelect(priceFromMedicine);
+                  }
+                }
+              }
+            }
+          } else if (priceId) {
+            // Si no hay proveedor pero sí precio, intentar seleccionarlo directamente
+            const allPrices = medicine.precios || [];
+            const price = allPrices.find(p => p.id === parseInt(priceId));
+            if (price) {
+              handlePriceSelect(price);
+            }
+          }
+        }
+      }
+      
+      // Limpiar parámetros de URL después de pre-seleccionar
+      window.history.replaceState({}, '', '/receipts');
+      // Limpiar el flag de sessionStorage
+      sessionStorage.removeItem('urlPreselected');
+    } catch (error) {
+      console.error('Error en pre-selección desde URL:', error);
+      // Limpiar el flag incluso si hay error
+      sessionStorage.removeItem('urlPreselected');
+    }
+  };
+
   const loadInitialData = async () => {
     try {
       setLoading(true);
@@ -58,12 +150,12 @@ const ReceiptFormAdvanced = () => {
         console.log('Usando tasa de envío por defecto del estado inicial');
       }
       
-      // Luego cargar datos reales
+      // Cargar datos en orden para que estén disponibles para pre-selección
+      await loadMedicines();
+      await loadSuppliers();
       await Promise.all([
         loadExchangeRate(),
-        loadShippingRate(),
-        loadMedicines(),
-        loadSuppliers()
+        loadShippingRate()
       ]);
     } catch (error) {
       console.error('Error cargando datos iniciales:', error);
@@ -150,12 +242,29 @@ const ReceiptFormAdvanced = () => {
     setSelectedMedicine(medicine);
     setCurrentItem({ ...currentItem, medicineId: medicine.id });
     
-    // Cargar precios del medicamento (mostrar todos los precios activos del medicamento)
+    // Cargar precios del medicamento
+    // Si hay un proveedor seleccionado, filtrar por proveedor
     try {
-      // Cargar los precios activos del medicamento
       if (medicine.precios && medicine.precios.length > 0) {
-        setMedicinePrices(medicine.precios);
-        console.log('Precios del medicamento cargados:', medicine.precios);
+        let filteredPrices = medicine.precios;
+        
+        // Si hay un proveedor seleccionado, filtrar precios por proveedor
+        if (selectedSupplier) {
+          // Mostrar precios del proveedor seleccionado o precios genéricos (sin proveedor)
+          filteredPrices = medicine.precios.filter(precio => 
+            !precio.supplierId || precio.supplierId === selectedSupplier.id
+          );
+          
+          // Priorizar precios del proveedor sobre precios genéricos
+          const supplierPrices = filteredPrices.filter(p => p.supplierId === selectedSupplier.id);
+          const genericPrices = filteredPrices.filter(p => !p.supplierId);
+          
+          // Si hay precios del proveedor, mostrarlos primero; si no, mostrar genéricos
+          filteredPrices = supplierPrices.length > 0 ? supplierPrices : genericPrices;
+        }
+        
+        setMedicinePrices(filteredPrices);
+        console.log('Precios del medicamento cargados:', filteredPrices);
       } else {
         setMedicinePrices([]);
         console.log('Medicamento sin precios configurados');
@@ -170,8 +279,27 @@ const ReceiptFormAdvanced = () => {
     setSelectedSupplier(supplier);
     setCurrentItem({ ...currentItem, supplierId: supplier.id });
     
-    // No cargar precios del proveedor porque ya están cargados con el medicamento
-    // Los precios se mantienen del medicamento seleccionado
+    // Si hay un medicamento seleccionado, filtrar precios por proveedor
+    if (selectedMedicine && selectedMedicine.precios) {
+      const filteredPrices = selectedMedicine.precios.filter(precio => 
+        !precio.supplierId || precio.supplierId === supplier.id
+      );
+      
+      // Priorizar precios del proveedor sobre precios genéricos
+      const supplierPrices = filteredPrices.filter(p => p.supplierId === supplier.id);
+      const genericPrices = filteredPrices.filter(p => !p.supplierId);
+      
+      const finalPrices = supplierPrices.length > 0 ? supplierPrices : genericPrices;
+      setMedicinePrices(finalPrices);
+      
+      // Si había un precio seleccionado que no coincide con el nuevo proveedor, limpiarlo
+      if (selectedPrice && selectedPrice.supplierId && selectedPrice.supplierId !== supplier.id) {
+        setSelectedPrice(null);
+        setCurrentItem({ ...currentItem, priceId: null, unitCost: 0 });
+      }
+      
+      console.log('Precios filtrados por proveedor:', finalPrices);
+    }
   };
 
   const handlePriceSelect = (price) => {
@@ -661,24 +789,31 @@ const ReceiptFormAdvanced = () => {
                 title={medicinePrices.length === 0 ? 'No hay precios configurados para este medicamento' : ''}
               >
                 <option value="">
-                  {medicinePrices.length === 0 ? 'Sin precios' : `Seleccionar precio (${medicinePrices.length} disponibles)`}
+                  {medicinePrices.length === 0 
+                    ? 'Sin precios disponibles' 
+                    : `${medicinePrices.length} precio${medicinePrices.length > 1 ? 's' : ''} disponible${medicinePrices.length > 1 ? 's' : ''}`
+                  }
                 </option>
                 {medicinePrices.map(price => (
                   <option key={price.id} value={price.id}>
-                    Compra: ${parseFloat(price.precioCompraUnitario).toFixed(2)} | Venta: ${parseFloat(price.precioVentaUnitario).toFixed(2)} | Margen: {price.margenUtilidad}%
+                    {price.supplier 
+                      ? `${parseFloat(price.precioCompraUnitario).toFixed(2)} DOP - ${price.supplier.name}` 
+                      : `${parseFloat(price.precioCompraUnitario).toFixed(2)} DOP - (Genérico)`
+                    }
                   </option>
                 ))}
               </select>
-              
               {selectedPrice && (
-                <div style={{
-                  padding: '4px',
-                  backgroundColor: '#e7f3ff',
-                  borderRadius: '3px',
-                  fontSize: '10px',
-                  color: '#0066cc'
-                }}>
-                  Precio seleccionado: Compra ${parseFloat(selectedPrice.precioCompraUnitario).toFixed(2)} | Venta ${parseFloat(selectedPrice.precioVentaUnitario).toFixed(2)}
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                  {selectedPrice.supplier 
+                    ? `Proveedor: ${selectedPrice.supplier.name}` 
+                    : 'Precio genérico (sin proveedor específico)'
+                  }
+                </div>
+              )}
+              {selectedMedicine && !selectedSupplier && (
+                <div style={{ fontSize: '11px', color: '#ff9800', marginTop: '4px' }}>
+                  💡 Selecciona un proveedor para ver precios específicos
                 </div>
               )}
               

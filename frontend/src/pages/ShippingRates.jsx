@@ -60,7 +60,13 @@ const ShippingRates = () => {
     }
 
     try {
-      await api.post('/shipping-rates/update', manualRate);
+      await api.post('/shipping-rates/update', {
+        domesticRate: manualRate.domesticRate,
+        internationalRate: manualRate.internationalRate,
+        weight: manualRate.weight,
+        description: manualRate.description,
+        source: 'manual'
+      });
       setManualRate({ 
         ...manualRate, 
         domesticRate: '', 

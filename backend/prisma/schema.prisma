@@ -19,12 +19,14 @@ model Supplier {
   phone     String?
   created_at DateTime @default(now())
   receipts  Receipt[]
+  medicinePrices MedicinePrice[]
 }
 
 model Customer {
   id        Int       @id @default(autoincrement())
   name      String
   phone     String?
+  email     String?
   created_at DateTime @default(now())
   sales     Sale[]
 }
@@ -86,6 +88,7 @@ model Medicine {
 model MedicinePrice {
   id                    Int                @id @default(autoincrement())
   medicineId            Int
+  supplierId            Int?               // Proveedor asociado (opcional para mantener flexibilidad)
   precioCompraUnitario  Decimal            @db.Decimal(10, 2)
   margenUtilidad        Decimal            @db.Decimal(5, 2) // Porcentaje
   precioVentaUnitario   Decimal            @db.Decimal(10, 2)
@@ -95,6 +98,7 @@ model MedicinePrice {
   updated_at            DateTime           @updatedAt
 
   medicine              Medicine           @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  supplier              Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@map("medicine_prices")
 }
@@ -174,5 +178,45 @@ model ExchangeRate {
 
   @@unique([fromCurrency, toCurrency, date], name: "unique_rate_per_day")
   @@map("exchange_rates")
+}
+
+model ExchangeRateMN {
+  id          Int      @id @default(autoincrement())
+  buyRate     Decimal  @db.Decimal(10, 4)
+  sellRate    Decimal  @db.Decimal(10, 4)
+  source      String   @default("manual") // "manual", "banco_central", "api_externa"
+  date        DateTime @default(now())
+  isActive    Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("exchange_rates_mn")
+}
+
+model UtilityRate {
+  id                Int      @id @default(autoincrement())
+  utilityPercentage Decimal  @db.Decimal(5, 2) // Porcentaje de utilidad
+  source            String   @default("manual")
+  date              DateTime @default(now())
+  isActive          Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("utility_rates")
+}
+
+model ShippingRate {
+  id                Int      @id @default(autoincrement())
+  domesticRate      Decimal  @db.Decimal(10, 2)
+  internationalRate Decimal  @db.Decimal(10, 2)
+  weight            Decimal  @db.Decimal(10, 3) // Peso en kg
+  description       String?  @db.Text
+  source            String   @default("manual")
+  date              DateTime @default(now())
+  isActive          Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("shipping_rates")
 }
 

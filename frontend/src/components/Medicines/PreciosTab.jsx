@@ -5,17 +5,24 @@ const PreciosTab = ({ medicines, onRefresh, loading }) => {
   const [selectedMedicine, setSelectedMedicine] = useState('');
   const [precioForm, setPrecioForm] = useState({
     precioCompraUnitario: '',
-    margenUtilidad: '',
-    precioLimiteDescuento: ''
+    supplierId: ''
   });
   const [precios, setPrecios] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  const calcularPrecioVenta = (precioCompra, margenUtilidad) => {
-    const margenDecimal = margenUtilidad / 100;
-    const factor = 1 - margenDecimal;
-    return factor > 0 ? precioCompra / factor : precioCompra;
+  const loadSuppliers = async () => {
+    try {
+      const { data } = await api.get('/suppliers');
+      setSuppliers(data);
+    } catch (error) {
+      console.error('Error cargando proveedores:', error);
+    }
   };
+
+  useEffect(() => {
+    loadSuppliers();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,20 +30,14 @@ const PreciosTab = ({ medicines, onRefresh, loading }) => {
     
     setSaving(true);
     try {
-      const precioVentaUnitario = calcularPrecioVenta(
-        parseFloat(precioForm.precioCompraUnitario),
-        parseFloat(precioForm.margenUtilidad)
-      );
-      
       await api.post(`/medicines/${selectedMedicine}/precios`, {
-        ...precioForm,
-        precioVentaUnitario
+        precioCompraUnitario: precioForm.precioCompraUnitario,
+        supplierId: precioForm.supplierId || null
       });
       
       setPrecioForm({
         precioCompraUnitario: '',
-        margenUtilidad: '',
-        precioLimiteDescuento: ''
+        supplierId: ''
       });
       loadPrecios();
     } catch (error) {
@@ -54,6 +55,21 @@ const PreciosTab = ({ medicines, onRefresh, loading }) => {
       setPrecios(data.precios || []);
     } catch (error) {
       console.error('Error cargando precios:', error);
+    }
+  };
+
+  const handleDelete = async (precioId) => {
+    if (!window.confirm('¿Está seguro de que desea desactivar este precio?')) {
+      return;
+    }
+    
+    try {
+      await api.delete(`/medicines/precios/${precioId}`);
+      loadPrecios(); // Recargar la lista
+      alert('Precio desactivado exitosamente');
+    } catch (error) {
+      const msg = error?.response?.data?.detail || error?.response?.data?.error || 'Error al desactivar precio';
+      alert(msg);
     }
   };
 
@@ -110,6 +126,33 @@ const PreciosTab = ({ medicines, onRefresh, loading }) => {
               <div style={{ display: 'grid', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#495057' }}>
+                    Proveedor (Opcional)
+                  </label>
+                  <select
+                    value={precioForm.supplierId}
+                    onChange={(e) => setPrecioForm({...precioForm, supplierId: e.target.value})}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #ced4da',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      backgroundColor: 'white'
+                    }}
+                  >
+                    <option value="">Sin proveedor específico</option>
+                    {suppliers.map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                  <small style={{ color: '#6c757d', fontSize: '12px', display: 'block', marginTop: '4px' }}>
+                    Si no seleccionas un proveedor, el precio será genérico
+                  </small>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#495057' }}>
                     Precio de Compra Unitario *
                   </label>
                   <input
@@ -127,61 +170,6 @@ const PreciosTab = ({ medicines, onRefresh, loading }) => {
                     }}
                   />
                 </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#495057' }}>
-                    Margen de Utilidad (%) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={precioForm.margenUtilidad}
-                    onChange={(e) => setPrecioForm({...precioForm, margenUtilidad: e.target.value})}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #ced4da',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#495057' }}>
-                    Precio Límite de Descuento (Opcional)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={precioForm.precioLimiteDescuento}
-                    onChange={(e) => setPrecioForm({...precioForm, precioLimiteDescuento: e.target.value})}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #ced4da',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  />
-                </div>
-
-                {precioForm.precioCompraUnitario && precioForm.margenUtilidad && (
-                  <div style={{
-                    backgroundColor: '#e3f2fd',
-                    padding: '12px',
-                    borderRadius: '4px',
-                    border: '1px solid #bbdefb'
-                  }}>
-                    <div style={{ fontSize: '14px', color: '#1976d2', fontWeight: '500' }}>
-                      Precio de Venta Calculado: ${calcularPrecioVenta(
-                        parseFloat(precioForm.precioCompraUnitario),
-                        parseFloat(precioForm.margenUtilidad)
-                      ).toFixed(2)}
-                    </div>
-                  </div>
-                )}
 
                 <button
                   type="submit"
@@ -241,40 +229,45 @@ const PreciosTab = ({ medicines, onRefresh, loading }) => {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
+                      <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '14px', fontWeight: '500', color: '#2c3e50', marginBottom: '4px' }}>
-                          Precio #{index + 1}
+                          {precio.supplier ? `Proveedor: ${precio.supplier.name}` : 'Precio genérico'}
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12px' }}>
-                          <div>
-                            <span style={{ color: '#6c757d' }}>Compra:</span>
-                            <span style={{ fontWeight: '500', color: '#dc3545' }}> ${precio.precioCompraUnitario}</span>
-                          </div>
-                          <div>
-                            <span style={{ color: '#6c757d' }}>Margen:</span>
-                            <span style={{ fontWeight: '500', color: '#17a2b8' }}> {precio.margenUtilidad}%</span>
-                          </div>
-                          <div>
-                            <span style={{ color: '#6c757d' }}>Venta:</span>
-                            <span style={{ fontWeight: '500', color: '#28a745' }}> ${precio.precioVentaUnitario}</span>
-                          </div>
-                          <div>
-                            <span style={{ color: '#6c757d' }}>Límite:</span>
-                            <span style={{ fontWeight: '500', color: '#ffc107' }}> 
-                              {precio.precioLimiteDescuento ? `$${precio.precioLimiteDescuento}` : 'N/A'}
-                            </span>
-                          </div>
+                        <div style={{ fontSize: '16px', fontWeight: '600', color: '#dc3545', marginBottom: '4px' }}>
+                          ${parseFloat(precio.precioCompraUnitario).toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                          Creado: {new Date(precio.created_at).toLocaleDateString('es-ES')}
                         </div>
                       </div>
-                      <div style={{
-                        backgroundColor: precio.activo ? '#d4edda' : '#f8d7da',
-                        color: precio.activo ? '#155724' : '#721c24',
-                        padding: '4px 8px',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: '500'
-                      }}>
-                        {precio.activo ? 'ACTIVO' : 'INACTIVO'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          backgroundColor: precio.activo ? '#d4edda' : '#f8d7da',
+                          color: precio.activo ? '#155724' : '#721c24',
+                          padding: '4px 8px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: '500'
+                        }}>
+                          {precio.activo ? 'ACTIVO' : 'INACTIVO'}
+                        </div>
+                        {precio.activo && (
+                          <button
+                            onClick={() => handleDelete(precio.id)}
+                            style={{
+                              backgroundColor: '#dc3545',
+                              color: 'white',
+                              border: 'none',
+                              padding: '6px 12px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Eliminar
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

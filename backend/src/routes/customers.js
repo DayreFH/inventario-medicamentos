@@ -29,15 +29,21 @@ router.get('/:id', async (req, res) => {
 
 /**
  * POST /api/customers
- * Crea cliente { name, phone? }
+ * Crea cliente { name, phone?, email? }
  */
 router.post('/', async (req, res) => {
-  const { name, phone } = req.body;
+  const { name, phone, email } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: 'El nombre es obligatorio' });
   }
   try {
-    const c = await prisma.customer.create({ data: { name: name.trim(), phone } });
+    const c = await prisma.customer.create({ 
+      data: { 
+        name: name.trim(), 
+        phone: phone?.trim() || null,
+        email: email?.trim() || null
+      } 
+    });
     res.status(201).json(c);
   } catch (e) {
     res.status(400).json({ error: 'No se pudo crear el cliente', detail: e.message });
@@ -46,17 +52,18 @@ router.post('/', async (req, res) => {
 
 /**
  * PUT /api/customers/:id
- * Actualiza cliente { name?, phone? }
+ * Actualiza cliente { name?, phone?, email? }
  */
 router.put('/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const { name, phone } = req.body;
+  const { name, phone, email } = req.body;
   try {
     const c = await prisma.customer.update({
       where: { id },
       data: {
         ...(name !== undefined ? { name: String(name).trim() } : {}),
-        ...(phone !== undefined ? { phone } : {})
+        ...(phone !== undefined ? { phone: phone?.trim() || null } : {}),
+        ...(email !== undefined ? { email: email?.trim() || null } : {})
       }
     });
     res.json(c);

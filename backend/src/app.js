@@ -9,6 +9,7 @@ import reports from './routes/reports.js';
 import exchangeRates from './routes/exchangeRates.js';
 import exchangeRatesMN from './routes/exchangeRatesMN.js';
 import shippingRates from './routes/shippingRates.js';
+import utilityRates from './routes/utilityRates.js';
 import schedulerService from './services/scheduler.js';
 
 const app = express();
@@ -24,6 +25,7 @@ app.use('/api/reports', reports);
 app.use('/api/exchange-rates', exchangeRates);
 app.use('/api/exchange-rates-mn', exchangeRatesMN);
 app.use('/api/shipping-rates', shippingRates);
+app.use('/api/utility-rates', utilityRates);
 
 app.get('/api/health', (_, res)=> res.json({ok:true}));
 

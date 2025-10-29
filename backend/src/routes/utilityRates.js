@@ -4,34 +4,31 @@ import { prisma } from '../db.js';
 const router = Router();
 
 /**
- * GET /api/exchange-rates-mn/current
- * Obtener la tasa de cambio actual USD-MN
+ * GET /api/utility-rates/current
+ * Obtener el % de utilidad actual
  */
 router.get('/current', async (req, res) => {
   try {
-    const currentRate = await prisma.exchangeRateMN.findFirst({
+    const currentRate = await prisma.utilityRate.findFirst({
       where: { isActive: true },
       orderBy: { date: 'desc' }
     });
 
     if (!currentRate) {
       return res.status(404).json({
-        error: 'No se encontró tasa de cambio',
-        message: 'No hay tasa disponible para USD/MN'
+        error: 'No se encontró % de utilidad',
+        message: 'No hay % de utilidad configurado'
       });
     }
 
     res.json({
-      fromCurrency: 'USD',
-      toCurrency: 'MN',
-      buyRate: parseFloat(currentRate.buyRate),
-      sellRate: parseFloat(currentRate.sellRate),
+      utilityPercentage: parseFloat(currentRate.utilityPercentage),
       source: currentRate.source,
       date: currentRate.date,
       isActive: currentRate.isActive
     });
   } catch (error) {
-    console.error('Error obteniendo tasa actual USD-MN:', error);
+    console.error('Error obteniendo % de utilidad actual:', error);
     res.status(500).json({ 
       error: 'Error interno del servidor',
       detail: error.message 
@@ -40,8 +37,8 @@ router.get('/current', async (req, res) => {
 });
 
 /**
- * GET /api/exchange-rates-mn/history
- * Obtener historial de tasas de cambio USD-MN
+ * GET /api/utility-rates/history
+ * Obtener historial de % de utilidad
  */
 router.get('/history', async (req, res) => {
   try {
@@ -52,7 +49,7 @@ router.get('/history', async (req, res) => {
     startDate.setDate(startDate.getDate() - parseInt(days));
     startDate.setHours(0, 0, 0, 0);
     
-    const history = await prisma.exchangeRateMN.findMany({
+    const history = await prisma.utilityRate.findMany({
       where: {
         date: {
           gte: startDate
@@ -64,13 +61,10 @@ router.get('/history', async (req, res) => {
     });
     
     res.json({
-      fromCurrency: 'USD',
-      toCurrency: 'MN',
       days: parseInt(days),
       rates: history.map(rate => ({
         id: rate.id,
-        buyRate: parseFloat(rate.buyRate),
-        sellRate: parseFloat(rate.sellRate),
+        utilityPercentage: parseFloat(rate.utilityPercentage),
         source: rate.source,
         date: rate.date,
         isActive: rate.isActive,
@@ -78,7 +72,7 @@ router.get('/history', async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('Error obteniendo historial USD-MN:', error);
+    console.error('Error obteniendo historial de % de utilidad:', error);
     res.status(500).json({ 
       error: 'Error interno del servidor',
       detail: error.message 
@@ -87,49 +81,39 @@ router.get('/history', async (req, res) => {
 });
 
 /**
- * POST /api/exchange-rates-mn/update
- * Actualizar tasa de cambio USD-MN manualmente
+ * POST /api/utility-rates/update
+ * Actualizar % de utilidad manualmente
  */
 router.post('/update', async (req, res) => {
   try {
-    const { buyRate, sellRate, source = 'manual' } = req.body;
+    const { utilityPercentage, source = 'manual' } = req.body;
     
-    if (!buyRate || !sellRate) {
+    if (!utilityPercentage) {
       return res.status(400).json({
         error: 'Datos requeridos faltantes',
-        message: 'Se requieren buyRate y sellRate'
+        message: 'Se requiere utilityPercentage'
       });
     }
 
-    const parsedBuyRate = parseFloat(buyRate);
-    const parsedSellRate = parseFloat(sellRate);
+    const parsedUtilityPercentage = parseFloat(utilityPercentage);
     
-    if (isNaN(parsedBuyRate) || isNaN(parsedSellRate) || 
-        parsedBuyRate <= 0 || parsedSellRate <= 0) {
+    if (isNaN(parsedUtilityPercentage) || parsedUtilityPercentage <= 0) {
       return res.status(400).json({
-        error: 'Tasas inválidas',
-        message: 'Las tasas deben ser números positivos'
-      });
-    }
-
-    if (parsedBuyRate >= parsedSellRate) {
-      return res.status(400).json({
-        error: 'Tasas inválidas',
-        message: 'La tasa de venta debe ser mayor que la tasa de compra'
+        error: 'Porcentaje inválido',
+        message: 'El % de utilidad debe ser un número positivo'
       });
     }
 
     // Desactivar todas las tasas anteriores
-    await prisma.exchangeRateMN.updateMany({
+    await prisma.utilityRate.updateMany({
       where: { isActive: true },
       data: { isActive: false }
     });
 
-    // Crear nueva tasa
-    const newRate = await prisma.exchangeRateMN.create({
+    // Crear nuevo % de utilidad
+    const newRate = await prisma.utilityRate.create({
       data: {
-        buyRate: parsedBuyRate,
-        sellRate: parsedSellRate,
+        utilityPercentage: parsedUtilityPercentage,
         source: source,
         date: new Date(),
         isActive: true
@@ -137,20 +121,17 @@ router.post('/update', async (req, res) => {
     });
 
     res.status(201).json({
-      message: 'Tasa de cambio USD-MN actualizada exitosamente',
+      message: '% de utilidad actualizado exitosamente',
       rate: {
         id: newRate.id,
-        fromCurrency: 'USD',
-        toCurrency: 'MN',
-        buyRate: parseFloat(newRate.buyRate),
-        sellRate: parseFloat(newRate.sellRate),
+        utilityPercentage: parseFloat(newRate.utilityPercentage),
         source: newRate.source,
         date: newRate.date,
         isActive: newRate.isActive
       }
     });
   } catch (error) {
-    console.error('Error actualizando tasa USD-MN:', error);
+    console.error('Error actualizando % de utilidad:', error);
     res.status(500).json({ 
       error: 'Error interno del servidor',
       detail: error.message 
@@ -159,21 +140,21 @@ router.post('/update', async (req, res) => {
 });
 
 /**
- * DELETE /api/exchange-rates-mn/current
- * Eliminar la tasa actual
+ * DELETE /api/utility-rates/current
+ * Eliminar el % de utilidad actual
  */
 router.delete('/current', async (req, res) => {
   try {
-    await prisma.exchangeRateMN.updateMany({
+    await prisma.utilityRate.updateMany({
       where: { isActive: true },
       data: { isActive: false }
     });
 
     res.json({
-      message: 'Tasa actual eliminada exitosamente'
+      message: '% de utilidad eliminado exitosamente'
     });
   } catch (error) {
-    console.error('Error eliminando tasa actual:', error);
+    console.error('Error eliminando % de utilidad actual:', error);
     res.status(500).json({ 
       error: 'Error interno del servidor',
       detail: error.message 
@@ -182,6 +163,4 @@ router.delete('/current', async (req, res) => {
 });
 
 export default router;
-
-
 

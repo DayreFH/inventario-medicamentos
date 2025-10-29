@@ -12,6 +12,7 @@ function normPrice(p) {
 }
 
 /** Calcula precio de venta basado en margen de utilidad */
+// Ya no se utiliza - mantenido para compatibilidad con código legacy
 function calcularPrecioVenta(precioCompra, margenUtilidad) {
   const margenDecimal = margenUtilidad / 100;
   const factor = 1 - margenDecimal;
@@ -34,7 +35,17 @@ router.get('/', async (req, res) => {
         ]
       } : undefined,
       include: {
-        precios: { where: { activo: true } },
+        precios: { 
+          where: { activo: true },
+          include: {
+            supplier: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
         parametros: true
       },
       orderBy: { nombreComercial: 'asc' },
@@ -55,7 +66,17 @@ router.get('/:id', async (req, res) => {
     const med = await prisma.medicine.findUnique({ 
       where: { id },
       include: {
-        precios: { where: { activo: true } },
+        precios: { 
+          where: { activo: true },
+          include: {
+            supplier: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        },
         parametros: true
       }
     });
@@ -156,19 +177,39 @@ router.put('/:id', async (req, res) => {
  */
 router.post('/:id/precios', async (req, res) => {
   const id = Number(req.params.id);
-  const { precioCompraUnitario, margenUtilidad, precioLimiteDescuento } = req.body;
+  const { precioCompraUnitario, supplierId } = req.body;
   
   try {
-    const precioVentaUnitario = calcularPrecioVenta(precioCompraUnitario, margenUtilidad);
+    // Si se especifica un proveedor, desactivar solo los precios activos de ese proveedor y medicamento
+    // Si no se especifica proveedor, desactivar los precios sin proveedor específico
+    const whereClause = {
+      medicineId: id,
+      activo: true,
+      ...(supplierId ? { supplierId: Number(supplierId) } : { supplierId: null })
+    };
+    
+    await prisma.medicinePrice.updateMany({
+      where: whereClause,
+      data: { activo: false }
+    });
     
     const precio = await prisma.medicinePrice.create({
       data: {
         medicineId: id,
+        supplierId: supplierId ? Number(supplierId) : null,
         precioCompraUnitario: normPrice(precioCompraUnitario),
-        margenUtilidad: normPrice(margenUtilidad),
-        precioVentaUnitario: normPrice(precioVentaUnitario),
-        precioLimiteDescuento: precioLimiteDescuento ? normPrice(precioLimiteDescuento) : null,
+        margenUtilidad: 0,
+        precioVentaUnitario: normPrice(precioCompraUnitario), // Por defecto igual al de compra
+        precioLimiteDescuento: null,
       },
+      include: {
+        supplier: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
     });
     res.status(201).json(precio);
   } catch (e) {
@@ -202,6 +243,23 @@ router.put('/:id/parametros', async (req, res) => {
     res.json(param);
   } catch (e) {
     res.status(400).json({ error: 'No se pudo actualizar los parámetros', detail: e.message });
+  }
+});
+
+/**
+ * DELETE /api/medicines/precios/:precioId
+ * Desactiva un precio de medicamento
+ */
+router.delete('/precios/:precioId', async (req, res) => {
+  const precioId = Number(req.params.precioId);
+  try {
+    await prisma.medicinePrice.update({
+      where: { id: precioId },
+      data: { activo: false }
+    });
+    res.status(200).json({ message: 'Precio desactivado exitosamente' });
+  } catch (e) {
+    res.status(400).json({ error: 'No se pudo desactivar el precio', detail: e.message });
   }
 });
 

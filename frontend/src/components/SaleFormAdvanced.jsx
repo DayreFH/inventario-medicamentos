@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../api/http';
+import { checkUtilityRate } from '../utils/checkUtilityRate';
 
 const SaleFormAdvanced = () => {
   const [exchangeRate, setExchangeRate] = useState({
@@ -15,6 +16,7 @@ const SaleFormAdvanced = () => {
     source: 'default'
   });
   const [exchangeRateMN, setExchangeRateMN] = useState(null);
+  const [utilityRate, setUtilityRate] = useState(null);
   const [medicines, setMedicines] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,8 @@ const SaleFormAdvanced = () => {
     const initializeData = async () => {
       await loadInitialData();
       await checkExchangeRateMN();
+      const util = await checkUtilityRate();
+      if (util !== null && util !== undefined) setUtilityRate(util);
     };
     
     initializeData();
@@ -54,6 +58,19 @@ const SaleFormAdvanced = () => {
           }
         } catch (e) {
           console.error('Error parsing localStorage:', e);
+        }
+      }
+      // Utility rate watcher
+      const savedUtil = localStorage.getItem('utilityRate');
+      if (savedUtil) {
+        try {
+          const data = JSON.parse(savedUtil);
+          const today = new Date().toDateString();
+          if (data.date === today && data.rate) {
+            setUtilityRate(parseFloat(data.rate));
+          }
+        } catch (e) {
+          console.error('Error parsing utilityRate from localStorage:', e);
         }
       }
     }, 1000);
@@ -81,6 +98,12 @@ const SaleFormAdvanced = () => {
         const today = new Date().toDateString();
         if (data.date === today) {
           setExchangeRateMN(data.rate);
+        }
+      } else if (e.key === 'utilityRate') {
+        const data = JSON.parse(e.newValue);
+        const today = new Date().toDateString();
+        if (data.date === today) {
+          setUtilityRate(data.rate);
         }
       } else if (e.key === 'medicinesUpdated') {
         console.log('Stock actualizado en otra pestaña - Recargando medicamentos');
@@ -304,11 +327,14 @@ const SaleFormAdvanced = () => {
       const esFrascoOTubo = presentacionUpper.includes('FRASCO') || presentacionUpper.includes('TUBO');
       const precioPorKgCuba = esFrascoOTubo ? pesoKg * 15 : pesoKg * 22;
       
-      // Precio en MN = (PRECIO X KG CUBA + PRECIO VENTA USD) × TASA MN
+      // Precio en MN = (PRECIO X KG CUBA + PRECIO VENTA USD) × TASA MN × (1 + % Utilidad/100)
       // Redondear valores intermedios para evitar discrepancias entre lo calculado y lo mostrado
       const precioPorKgCubaRounded = Math.round(precioPorKgCuba * 100) / 100;
       const precioVentaUSDRounded = Math.round(precioVentaUSD * 100) / 100;
-      const precioVentaMN = (precioPorKgCubaRounded + precioVentaUSDRounded) * exchangeRateMN;
+      const precioBaseMN = (precioPorKgCubaRounded + precioVentaUSDRounded) * exchangeRateMN;
+      // Aplicar % de utilidad
+      const utilityMultiplier = utilityRate ? (1 + utilityRate / 100) : 1;
+      const precioVentaMN = precioBaseMN * utilityMultiplier;
       
       // Subtotal USD
       const subtotalUSD = precioVentaUSDRounded * newTotalQuantity;
@@ -346,11 +372,14 @@ const SaleFormAdvanced = () => {
       const esFrascoOTubo = presentacionUpper.includes('FRASCO') || presentacionUpper.includes('TUBO');
       const precioPorKgCuba = esFrascoOTubo ? pesoKg * 15 : pesoKg * 22;
       
-      // Precio en MN = (PRECIO X KG CUBA + PRECIO VENTA USD) × TASA MN
+      // Precio en MN = (PRECIO X KG CUBA + PRECIO VENTA USD) × TASA MN × (1 + % Utilidad/100)
       // Redondear valores intermedios para evitar discrepancias entre lo calculado y lo mostrado
       const precioPorKgCubaRounded = Math.round(precioPorKgCuba * 100) / 100;
       const precioVentaUSDRounded = Math.round(precioVentaUSD * 100) / 100;
-      const precioVentaMN = (precioPorKgCubaRounded + precioVentaUSDRounded) * exchangeRateMN;
+      const precioBaseMN = (precioPorKgCubaRounded + precioVentaUSDRounded) * exchangeRateMN;
+      // Aplicar % de utilidad
+      const utilityMultiplier = utilityRate ? (1 + utilityRate / 100) : 1;
+      const precioVentaMN = precioBaseMN * utilityMultiplier;
       
       // Subtotal USD
       const subtotalUSD = precioVentaUSDRounded * currentItem.quantity;
@@ -520,6 +549,7 @@ const SaleFormAdvanced = () => {
           </span>
           <span>Fecha: {new Date().toLocaleDateString('es-DO')}</span>
           <span>T.C. MN: {exchangeRateMN ? `${exchangeRateMN} MN` : 'No configurado'}</span>
+          <span>% Utilidad: {utilityRate ? `${utilityRate}%` : 'No configurado'}</span>
         </div>
       </div>
 

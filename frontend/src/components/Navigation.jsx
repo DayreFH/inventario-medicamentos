@@ -11,7 +11,8 @@ const Navigation = () => {
       icon: '📊',
       children: [
         { title: 'Alertas de Stock', path: '/' },
-        { title: 'Top Clientes', path: '/top-customers' }
+        { title: 'Principales Clientes', path: '/top-customers' },
+        { title: 'Mejores Precios-Proveedores', path: '/best-prices' }
       ]
     },
     {
@@ -20,7 +21,8 @@ const Navigation = () => {
       children: [
         { title: 'Tasa de Cambio DOP-USD', path: '/admin/dop-usd' },
         { title: 'Tasa de Cambio USD-MN', path: '/admin/usd-mn' },
-        { title: 'Tasa de Envío', path: '/admin/shipping' }
+        { title: 'Tasa de Envío', path: '/admin/shipping' },
+        { title: '% de Utilidad', path: '/admin/utility' }
       ]
     },
     {

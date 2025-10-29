@@ -1,10 +1,7 @@
 import { Router } from 'express';
+import { prisma } from '../db.js';
 
 const router = Router();
-
-// Simulamos una base de datos en memoria para las tasas de envío
-let currentRate = null;
-let rateHistory = [];
 
 /**
  * GET /api/shipping-rates/current
@@ -12,6 +9,11 @@ let rateHistory = [];
  */
 router.get('/current', async (req, res) => {
   try {
+    const currentRate = await prisma.shippingRate.findFirst({
+      where: { isActive: true },
+      orderBy: { date: 'desc' }
+    });
+
     if (!currentRate) {
       return res.status(404).json({
         error: 'No se encontró tasa de envío',
@@ -20,12 +22,12 @@ router.get('/current', async (req, res) => {
     }
 
     res.json({
-      fromCurrency: currentRate.fromCurrency,
-      toCurrency: currentRate.toCurrency,
+      fromCurrency: 'USD',
+      toCurrency: 'DOP',
       domesticRate: parseFloat(currentRate.domesticRate),
       internationalRate: parseFloat(currentRate.internationalRate),
       weight: parseFloat(currentRate.weight),
-      description: currentRate.description,
+      description: currentRate.description || '',
       source: currentRate.source,
       date: currentRate.date,
       isActive: currentRate.isActive
@@ -50,25 +52,33 @@ router.get('/history', async (req, res) => {
     // Filtrar historial por días
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(days));
+    startDate.setHours(0, 0, 0, 0);
     
-    const filteredHistory = rateHistory.filter(rate => 
-      new Date(rate.date) >= startDate
-    ).sort((a, b) => new Date(b.date) - new Date(a.date));
+    const history = await prisma.shippingRate.findMany({
+      where: {
+        date: {
+          gte: startDate
+        }
+      },
+      orderBy: {
+        date: 'desc'
+      }
+    });
     
     res.json({
       fromCurrency: 'USD',
       toCurrency: 'DOP',
       days: parseInt(days),
-      rates: filteredHistory.map(rate => ({
+      rates: history.map(rate => ({
         id: rate.id,
         domesticRate: parseFloat(rate.domesticRate),
         internationalRate: parseFloat(rate.internationalRate),
         weight: parseFloat(rate.weight),
-        description: rate.description,
+        description: rate.description || '',
         source: rate.source,
         date: rate.date,
         isActive: rate.isActive,
-        createdAt: rate.createdAt
+        createdAt: rate.created_at
       }))
     });
   } catch (error) {
@@ -87,8 +97,6 @@ router.get('/history', async (req, res) => {
 router.post('/update', async (req, res) => {
   try {
     const { 
-      fromCurrency, 
-      toCurrency, 
       domesticRate, 
       internationalRate, 
       weight, 
@@ -96,10 +104,10 @@ router.post('/update', async (req, res) => {
       source = 'manual' 
     } = req.body;
     
-    if (!fromCurrency || !toCurrency || !domesticRate || !internationalRate || !weight) {
+    if (!domesticRate || !internationalRate || !weight) {
       return res.status(400).json({
         error: 'Datos requeridos faltantes',
-        message: 'Se requieren fromCurrency, toCurrency, domesticRate, internationalRate y weight'
+        message: 'Se requieren domesticRate, internationalRate y weight'
       });
     }
 
@@ -122,47 +130,35 @@ router.post('/update', async (req, res) => {
       });
     }
 
-    // Desactivar tasa anterior
-    if (currentRate) {
-      currentRate.isActive = false;
-    }
+    // Desactivar todas las tasas anteriores
+    await prisma.shippingRate.updateMany({
+      where: { isActive: true },
+      data: { isActive: false }
+    });
 
     // Crear nueva tasa
-    const newRate = {
-      id: Date.now(),
-      fromCurrency,
-      toCurrency,
-      domesticRate: parsedDomesticRate,
-      internationalRate: parsedInternationalRate,
-      weight: parsedWeight,
-      description: description.trim(),
-      source,
-      date: new Date(),
-      isActive: true,
-      createdAt: new Date()
-    };
-
-    // Actualizar tasa actual
-    currentRate = newRate;
-    
-    // Agregar al historial
-    rateHistory.unshift(newRate);
-    
-    // Mantener solo los últimos 100 registros
-    if (rateHistory.length > 100) {
-      rateHistory = rateHistory.slice(0, 100);
-    }
+    const newRate = await prisma.shippingRate.create({
+      data: {
+        domesticRate: parsedDomesticRate,
+        internationalRate: parsedInternationalRate,
+        weight: parsedWeight,
+        description: description.trim() || null,
+        source: source,
+        date: new Date(),
+        isActive: true
+      }
+    });
 
     res.status(201).json({
       message: 'Tasas de envío actualizadas exitosamente',
       rate: {
         id: newRate.id,
-        fromCurrency: newRate.fromCurrency,
-        toCurrency: newRate.toCurrency,
-        domesticRate: newRate.domesticRate,
-        internationalRate: newRate.internationalRate,
-        weight: newRate.weight,
-        description: newRate.description,
+        fromCurrency: 'USD',
+        toCurrency: 'DOP',
+        domesticRate: parseFloat(newRate.domesticRate),
+        internationalRate: parseFloat(newRate.internationalRate),
+        weight: parseFloat(newRate.weight),
+        description: newRate.description || '',
         source: newRate.source,
         date: newRate.date,
         isActive: newRate.isActive
@@ -183,10 +179,10 @@ router.post('/update', async (req, res) => {
  */
 router.delete('/current', async (req, res) => {
   try {
-    if (currentRate) {
-      currentRate.isActive = false;
-      currentRate = null;
-    }
+    await prisma.shippingRate.updateMany({
+      where: { isActive: true },
+      data: { isActive: false }
+    });
 
     res.json({
       message: 'Tasas de envío eliminadas exitosamente'
@@ -208,6 +204,11 @@ router.get('/calculate', async (req, res) => {
   try {
     const { weight, type = 'domestic' } = req.query;
     
+    const currentRate = await prisma.shippingRate.findFirst({
+      where: { isActive: true },
+      orderBy: { date: 'desc' }
+    });
+    
     if (!currentRate) {
       return res.status(404).json({
         error: 'No hay tasas configuradas',
@@ -223,8 +224,10 @@ router.get('/calculate', async (req, res) => {
       });
     }
 
-    const baseWeight = currentRate.weight;
-    const baseRate = type === 'international' ? currentRate.internationalRate : currentRate.domesticRate;
+    const baseWeight = parseFloat(currentRate.weight);
+    const baseRate = type === 'international' 
+      ? parseFloat(currentRate.internationalRate) 
+      : parseFloat(currentRate.domesticRate);
     
     // Calcular costo proporcional al peso
     const calculatedRate = (parsedWeight / baseWeight) * baseRate;

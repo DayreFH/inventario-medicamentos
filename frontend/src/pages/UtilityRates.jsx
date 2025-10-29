@@ -1,16 +1,12 @@
 import { useState, useEffect } from 'react';
 import api from '../api/http';
 
-const ExchangeRatesMN = () => {
+const UtilityRates = () => {
   const [currentRate, setCurrentRate] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [manualRate, setManualRate] = useState({
-    fromCurrency: 'USD',
-    toCurrency: 'MN',
-    buyRate: '',
-    sellRate: ''
+    utilityPercentage: ''
   });
 
   useEffect(() => {
@@ -33,16 +29,16 @@ const ExchangeRatesMN = () => {
 
   const loadCurrentRate = async () => {
     try {
-      const { data } = await api.get('/exchange-rates-mn/current');
+      const { data } = await api.get('/utility-rates/current');
       setCurrentRate(data);
     } catch (error) {
-      console.error('Error cargando tasa actual:', error);
+      console.error('Error cargando % de utilidad actual:', error);
     }
   };
 
   const loadHistory = async () => {
     try {
-      const { data } = await api.get('/exchange-rates-mn/history?days=30');
+      const { data } = await api.get('/utility-rates/history?days=30');
       setHistory(data.rates);
     } catch (error) {
       console.error('Error cargando historial:', error);
@@ -53,49 +49,35 @@ const ExchangeRatesMN = () => {
     e.preventDefault();
     
     // Validación de campos
-    if (!manualRate.buyRate || !manualRate.sellRate || 
-        parseFloat(manualRate.buyRate) <= 0 || parseFloat(manualRate.sellRate) <= 0) {
-      alert('Por favor ingrese tasas válidas para compra y venta');
-      return;
-    }
-
-    const buyRate = parseFloat(manualRate.buyRate);
-    const sellRate = parseFloat(manualRate.sellRate);
-    
-    // Validar que la tasa de venta sea mayor que la de compra
-    if (buyRate >= sellRate) {
-      alert('La tasa de venta debe ser mayor que la tasa de compra. Ejemplo: Compra: 25.50, Venta: 26.00');
+    if (!manualRate.utilityPercentage || parseFloat(manualRate.utilityPercentage) <= 0) {
+      alert('Por favor ingrese un % de utilidad válido');
       return;
     }
 
     try {
-      const response = await api.post('/exchange-rates-mn/update', {
-        buyRate: manualRate.buyRate,
-        sellRate: manualRate.sellRate,
-        source: 'manual'
-      });
+      const response = await api.post('/utility-rates/update', manualRate);
       
-      // Guardar la tasa en localStorage para que esté disponible inmediatamente en las salidas
+      // Guardar el % de utilidad en localStorage para que esté disponible inmediatamente
       const today = new Date().toDateString();
-      localStorage.setItem('exchangeRateMN', JSON.stringify({
+      localStorage.setItem('utilityRate', JSON.stringify({
         date: today,
-        rate: sellRate // Usar la tasa de venta
+        rate: parseFloat(manualRate.utilityPercentage)
       }));
       
-      setManualRate({ ...manualRate, buyRate: '', sellRate: '' });
+      setManualRate({ ...manualRate, utilityPercentage: '' });
       await loadCurrentRate();
       await loadHistory();
       
-      alert('Tasa de cambio USD-MN actualizada exitosamente');
+      alert('% de utilidad actualizado exitosamente');
     } catch (error) {
-      const msg = error?.response?.data?.message || error?.response?.data?.error || 'Error actualizando tasa';
-      console.error('Error actualizando tasa:', error);
+      const msg = error?.response?.data?.message || error?.response?.data?.error || 'Error actualizando % de utilidad';
+      console.error('Error actualizando % de utilidad:', error);
       alert(`Error: ${msg}`);
     }
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('es-CU', {
+    return new Date(dateString).toLocaleDateString('es-ES', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -107,8 +89,6 @@ const ExchangeRatesMN = () => {
   const getSourceIcon = (source) => {
     switch (source) {
       case 'manual': return '✋';
-      case 'banco_central': return '🏛️';
-      case 'api_externa': return '🌐';
       default: return '📊';
     }
   };
@@ -116,8 +96,6 @@ const ExchangeRatesMN = () => {
   const getSourceName = (source) => {
     switch (source) {
       case 'manual': return 'Manual';
-      case 'banco_central': return 'Banco Central';
-      case 'api_externa': return 'API Externa';
       default: return 'Desconocido';
     }
   };
@@ -131,18 +109,18 @@ const ExchangeRatesMN = () => {
           fontSize: '28px',
           fontWeight: 'bold'
         }}>
-          Tasa de Cambio USD-MN (Moneda Nacional de Cuba)
+          Porcentaje de Utilidad
         </h1>
         <p style={{ color: '#6c757d', margin: 0 }}>
-          Gestión manual de tasas de cambio USD a Moneda Nacional de Cuba
+          Configuración del porcentaje de utilidad para el cálculo de precios de venta
         </p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        {/* Tasa Actual */}
+        {/* % Actual */}
         <div>
           <h3 style={{ color: '#495057', marginBottom: '16px' }}>
-            Tasa de Cambio Actual
+            % de Utilidad Actual
           </h3>
           <div style={{
             backgroundColor: '#ffffff',
@@ -158,41 +136,22 @@ const ExchangeRatesMN = () => {
             ) : currentRate ? (
               <div>
                 <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '16px',
+                  backgroundColor: '#f8f9fa',
+                  border: '1px solid #e9ecef',
+                  borderRadius: '8px',
+                  padding: '32px',
+                  textAlign: 'center',
                   marginBottom: '16px'
                 }}>
-                  <div style={{
-                    backgroundColor: '#f8f9fa',
-                    border: '1px solid #e9ecef',
-                    borderRadius: '8px',
-                    padding: '16px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>Compra (1 USD = ? MN)</div>
-                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#2c3e50' }}>
-                      {currentRate.buyRate || 'N/A'}
-                    </div>
-                  </div>
-                  <div style={{
-                    backgroundColor: '#f8f9fa',
-                    border: '1px solid #e9ecef',
-                    borderRadius: '8px',
-                    padding: '16px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>Venta (1 USD = ? MN)</div>
-                    <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#2c3e50' }}>
-                      {currentRate.sellRate || 'N/A'}
-                    </div>
+                  <div style={{ fontSize: '14px', color: '#6c757d', marginBottom: '8px' }}>Porcentaje de Utilidad</div>
+                  <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#28a745' }}>
+                    {currentRate.utilityPercentage}%
                   </div>
                 </div>
                 <div style={{ 
                   display: 'flex', 
                   justifyContent: 'space-between', 
                   alignItems: 'center',
-                  marginBottom: '16px',
                   padding: '12px',
                   backgroundColor: '#f8f9fa',
                   borderRadius: '6px'
@@ -213,7 +172,7 @@ const ExchangeRatesMN = () => {
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '20px', color: '#6c757d' }}>
-                No hay tasa de cambio disponible
+                No hay % de utilidad configurado
               </div>
             )}
           </div>
@@ -233,90 +192,27 @@ const ExchangeRatesMN = () => {
           }}>
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#495057' }}>
-                Moneda Base
+                % de Utilidad
               </label>
-              <select
-                value={manualRate.fromCurrency}
-                disabled
+              <input
+                type="number"
+                step="0.01"
+                value={manualRate.utilityPercentage}
+                onChange={(e) => setManualRate({...manualRate, utilityPercentage: e.target.value})}
+                placeholder="Ej: 30.00"
                 style={{
                   width: '100%',
-                  padding: '10px 12px',
+                  padding: '12px',
                   border: '1px solid #ced4da',
                   borderRadius: '4px',
-                  fontSize: '14px',
-                  backgroundColor: '#f8f9fa'
+                  fontSize: '16px',
+                  textAlign: 'center',
+                  fontWeight: 'bold'
                 }}
-              >
-                <option value="USD">USD - Dólar Americano</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#495057' }}>
-                Moneda Destino
-              </label>
-              <select
-                value={manualRate.toCurrency}
-                disabled
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                  backgroundColor: '#f8f9fa'
-                }}
-              >
-                <option value="MN">MN - Moneda Nacional de Cuba</option>
-              </select>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#495057' }}>
-                  Tasa de Compra (MN)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={manualRate.buyRate}
-                  onChange={(e) => setManualRate({...manualRate, buyRate: e.target.value})}
-                  placeholder="Ej: 25.50"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #ced4da',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
-                />
-                <small style={{ color: '#6c757d', fontSize: '12px' }}>
-                  Cuántos MN por 1 USD (compra)
-                </small>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#495057' }}>
-                  Tasa de Venta (MN)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={manualRate.sellRate}
-                  onChange={(e) => setManualRate({...manualRate, sellRate: e.target.value})}
-                  placeholder="Ej: 26.00"
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #ced4da',
-                    borderRadius: '4px',
-                    fontSize: '14px'
-                  }}
-                />
-                <small style={{ color: '#6c757d', fontSize: '12px' }}>
-                  Cuántos MN por 1 USD (venta)
-                </small>
-              </div>
+              />
+              <small style={{ color: '#6c757d', fontSize: '12px' }}>
+                Ingrese el porcentaje de utilidad deseado
+              </small>
             </div>
 
             <button
@@ -333,7 +229,7 @@ const ExchangeRatesMN = () => {
                 cursor: 'pointer'
               }}
             >
-              ✋ Actualizar Tasa USD-MN
+              ✋ Actualizar % de Utilidad
             </button>
           </form>
         </div>
@@ -342,7 +238,7 @@ const ExchangeRatesMN = () => {
       {/* Historial */}
       <div style={{ marginTop: '32px' }}>
         <h3 style={{ color: '#495057', marginBottom: '16px' }}>
-          Historial de Tasas USD-MN (Últimos 30 días)
+          Historial de % de Utilidad (Últimos 30 días)
         </h3>
         <div style={{
           backgroundColor: '#ffffff',
@@ -364,7 +260,7 @@ const ExchangeRatesMN = () => {
                       Fecha
                     </th>
                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#495057' }}>
-                      Tasas (1 USD = ? MN)
+                      % de Utilidad
                     </th>
                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#495057' }}>
                       Fuente
@@ -380,17 +276,10 @@ const ExchangeRatesMN = () => {
                       <td style={{ padding: '12px' }}>
                         {formatDate(rate.date)}
                       </td>
-                      <td style={{ padding: '12px', fontWeight: '500' }}>
-                        <div style={{ display: 'flex', gap: '16px' }}>
-                          <div>
-                            <span style={{ color: '#17a2b8', fontSize: '12px' }}>Compra:</span>
-                            <span style={{ marginLeft: '4px' }}>{rate.buyRate} MN</span>
-                          </div>
-                          <div>
-                            <span style={{ color: '#28a745', fontSize: '12px' }}>Venta:</span>
-                            <span style={{ marginLeft: '4px' }}>{rate.sellRate} MN</span>
-                          </div>
-                        </div>
+                      <td style={{ padding: '12px', fontWeight: '500', fontSize: '16px' }}>
+                        <span style={{ color: '#28a745', fontSize: '18px' }}>
+                          {rate.utilityPercentage}%
+                        </span>
                       </td>
                       <td style={{ padding: '12px' }}>
                         {getSourceIcon(rate.source)} {getSourceName(rate.source)}
@@ -404,7 +293,7 @@ const ExchangeRatesMN = () => {
                           fontSize: '12px',
                           fontWeight: '500'
                         }}>
-                          {rate.isActive ? 'ACTIVA' : 'INACTIVA'}
+                          {rate.isActive ? 'ACTIVO' : 'INACTIVO'}
                         </span>
                       </td>
                     </tr>
@@ -419,6 +308,5 @@ const ExchangeRatesMN = () => {
   );
 };
 
-export default ExchangeRatesMN;
-
+export default UtilityRates;
 

@@ -1,15 +1,41 @@
 import { useEffect, useState } from 'react';
 import api from '../api/http';
 
+// Lista de países con prefijos telefónicos
+const countries = [
+  { code: 'DO-809', name: 'República Dominicana (809)', prefix: '+1-809' },
+  { code: 'DO-829', name: 'República Dominicana (829)', prefix: '+1-829' },
+  { code: 'DO-849', name: 'República Dominicana (849)', prefix: '+1-849' },
+  { code: 'CU', name: 'Cuba', prefix: '+53' },
+  { code: 'US', name: 'Estados Unidos', prefix: '+1' },
+  { code: 'MX', name: 'México', prefix: '+52' },
+  { code: 'CO', name: 'Colombia', prefix: '+57' },
+  { code: 'PE', name: 'Perú', prefix: '+51' },
+  { code: 'AR', name: 'Argentina', prefix: '+54' },
+  { code: 'CL', name: 'Chile', prefix: '+56' },
+  { code: 'ES', name: 'España', prefix: '+34' },
+  { code: 'PA', name: 'Panamá', prefix: '+507' },
+  { code: 'CR', name: 'Costa Rica', prefix: '+506' },
+  { code: 'VE', name: 'Venezuela', prefix: '+58' },
+  { code: 'EC', name: 'Ecuador', prefix: '+593' },
+  { code: 'GT', name: 'Guatemala', prefix: '+502' },
+  { code: 'HN', name: 'Honduras', prefix: '+504' },
+  { code: 'NI', name: 'Nicaragua', prefix: '+505' },
+  { code: 'SV', name: 'El Salvador', prefix: '+503' },
+  { code: 'BO', name: 'Bolivia', prefix: '+591' },
+  { code: 'UY', name: 'Uruguay', prefix: '+598' },
+  { code: 'PY', name: 'Paraguay', prefix: '+595' }
+];
+
 export default function Suppliers() {
   const [list, setList] = useState([]);
-  const [form, setForm] = useState({ name: '', phone: '' });
+  const [form, setForm] = useState({ name: '', phone: '', countryCode: 'DO-809' });
   const [q, setQ] = useState('');
   const [loading, setLoading] = useState(false);
 
   // edición
   const [editId, setEditId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', phone: '' });
+  const [editForm, setEditForm] = useState({ name: '', phone: '', countryCode: 'DO-809' });
 
   const load = async (query = '') => {
     setLoading(true);
@@ -25,13 +51,84 @@ export default function Suppliers() {
 
   useEffect(() => { load(); }, []);
 
+  // Función para obtener el prefijo del país seleccionado
+  const getPrefix = (countryCode) => {
+    const country = countries.find(c => c.code === countryCode);
+    return country ? country.prefix : '';
+  };
+
+  // Función para combinar prefijo + número
+  const combinePhone = (prefix, number) => {
+    if (!number || !number.trim()) return null;
+    const cleanNumber = number.trim();
+    // Si ya tiene el prefijo, no agregarlo de nuevo
+    if (cleanNumber.startsWith('+')) return cleanNumber;
+    return prefix ? `${prefix} ${cleanNumber}` : cleanNumber;
+  };
+
+  // Función para extraer país y número del teléfono guardado
+  const parsePhone = (phone) => {
+    if (!phone) return { countryCode: 'DO-809', number: '' };
+    
+    // Normalizar el prefijo (quitar espacios y guiones)
+    const normalizedPhone = phone.trim();
+    
+    // Primero buscar prefijos específicos de República Dominicana (809, 829, 849)
+    const dominicanPrefixes = ['+1-809', '+1-829', '+1-849', '+1809', '+1829', '+1849'];
+    for (let i = 0; i < dominicanPrefixes.length; i++) {
+      const prefix = dominicanPrefixes[i];
+      const phoneWithoutSpaces = normalizedPhone.replace(/\s|-/g, '');
+      const prefixWithoutSpaces = prefix.replace(/\s|-/g, '');
+      
+      if (phoneWithoutSpaces.startsWith(prefixWithoutSpaces)) {
+        const code = i === 0 || i === 3 ? 'DO-809' : (i === 1 || i === 4 ? 'DO-829' : 'DO-849');
+        const number = normalizedPhone.replace(/\+1[-]?(809|829|849)/, '').trim();
+        return { countryCode: code, number };
+      }
+      
+      if (normalizedPhone.startsWith(prefix)) {
+        const code = i === 0 || i === 3 ? 'DO-809' : (i === 1 || i === 4 ? 'DO-829' : 'DO-849');
+        const number = normalizedPhone.substring(prefix.length).trim();
+        return { countryCode: code, number };
+      }
+    }
+    
+    // Buscar otros países
+    for (const country of countries) {
+      // Normalizar el prefijo del país para comparar
+      const normalizedPrefix = country.prefix.replace(/\s|-/g, '');
+      const phoneWithoutSpaces = normalizedPhone.replace(/\s|-/g, '');
+      
+      if (phoneWithoutSpaces.startsWith(normalizedPrefix)) {
+        // Extraer el número removiendo el prefijo
+        const number = normalizedPhone.substring(country.prefix.length).trim();
+        return { countryCode: country.code, number };
+      }
+      
+      // También verificar si solo comienza con el código del país
+      if (normalizedPhone.startsWith(country.prefix)) {
+        const number = normalizedPhone.substring(country.prefix.length).trim();
+        return { countryCode: country.code, number };
+      }
+    }
+    
+    // Si no encuentra prefijo, asumir país por defecto (República Dominicana 809)
+    return { countryCode: 'DO-809', number: phone };
+  };
+
   const save = async (e) => {
     e.preventDefault();
     const name = form.name.trim();
     if (!name) return alert('El nombre es obligatorio');
     try {
-      await api.post('/suppliers', { name, phone: form.phone?.trim() || null });
-      setForm({ name: '', phone: '' });
+      const prefix = getPrefix(form.countryCode);
+      const fullPhone = combinePhone(prefix, form.phone);
+      
+      await api.post('/suppliers', { 
+        name, 
+        phone: fullPhone
+      });
+      setForm({ name: '', phone: '', countryCode: 'DO-809' });
       await load(q);
     } catch (e) {
       alert(e?.response?.data?.error || e?.response?.data?.detail || 'No se pudo crear el proveedor');
@@ -40,19 +137,30 @@ export default function Suppliers() {
 
   const startEdit = (s) => {
     setEditId(s.id);
-    setEditForm({ name: s.name, phone: s.phone || '' });
+    const phoneData = parsePhone(s.phone);
+    setEditForm({ 
+      name: s.name, 
+      phone: phoneData.number,
+      countryCode: phoneData.countryCode
+    });
   };
 
   const cancelEdit = () => {
     setEditId(null);
-    setEditForm({ name: '', phone: '' });
+    setEditForm({ name: '', phone: '', countryCode: 'DO-809' });
   };
 
   const saveEdit = async (id) => {
     const name = editForm.name.trim();
     if (!name) return alert('El nombre es obligatorio');
     try {
-      await api.put(`/suppliers/${id}`, { name, phone: editForm.phone?.trim() || null });
+      const prefix = getPrefix(editForm.countryCode);
+      const fullPhone = combinePhone(prefix, editForm.phone);
+      
+      await api.put(`/suppliers/${id}`, { 
+        name, 
+        phone: fullPhone
+      });
       cancelEdit();
       await load(q);
     } catch (e) {
@@ -81,66 +189,363 @@ export default function Suppliers() {
   };
 
   return (
-    <div>
-      <h2>Proveedores</h2>
+    <div style={{ padding: '24px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+      {/* Encabezado */}
+      <div style={{ marginBottom: '32px' }}>
+        <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '28px', fontWeight: '600', marginBottom: '8px' }}>
+          Gestión de Proveedores
+        </h1>
+        <p style={{ color: '#6c757d', margin: 0 }}>
+          Administre la información de los proveedores del sistema
+        </p>
+      </div>
 
-      {/* Búsqueda */}
-      <form onSubmit={onSearch} style={{ display:'flex', gap:8, margin:'12px 0', alignItems:'center', flexWrap:'wrap' }}>
-        <input placeholder="Buscar por nombre..." value={q} onChange={e=>setQ(e.target.value)} />
-        <button type="submit">Buscar</button>
-        <button type="button" onClick={clearSearch}>Limpiar</button>
-        {loading && <span style={{color:'#666'}}>Cargando...</span>}
-      </form>
+      {/* Formulario de búsqueda y creación */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+        {/* Búsqueda */}
+        <div>
+          <h3 style={{ color: '#495057', marginBottom: '16px' }}>
+            Buscar Proveedor
+          </h3>
+          <form onSubmit={onSearch} style={{
+            backgroundColor: '#ffffff',
+            padding: '20px',
+            borderRadius: '8px',
+            border: '1px solid #e9ecef',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ marginBottom: '16px' }}>
+              <input
+                type="text"
+                placeholder="Buscar por nombre..."
+                value={q}
+                onChange={e => setQ(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="submit"
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                🔍 Buscar
+              </button>
+              <button
+                type="button"
+                onClick={clearSearch}
+                style={{
+                  padding: '10px 16px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                Limpiar
+              </button>
+            </div>
+            {loading && (
+              <div style={{ marginTop: '12px', color: '#6c757d', fontSize: '14px' }}>
+                Cargando...
+              </div>
+            )}
+          </form>
+        </div>
 
-      {/* Alta rápida */}
-      <form onSubmit={save} style={{ display:'flex', gap:8, flexWrap:'wrap', margin:'12px 0' }}>
-        <input placeholder="Nombre del proveedor" value={form.name} onChange={e=>setForm({...form, name:e.target.value})}/>
-        <input placeholder="Teléfono (opcional)" value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})}/>
-        <button>Agregar</button>
-      </form>
+        {/* Formulario de creación */}
+        <div>
+          <h3 style={{ color: '#495057', marginBottom: '16px' }}>
+            Agregar Proveedor
+          </h3>
+          <form onSubmit={save} style={{
+            backgroundColor: '#ffffff',
+            padding: '20px',
+            borderRadius: '8px',
+            border: '1px solid #e9ecef',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#495057' }}>
+                Nombre *
+              </label>
+              <input
+                type="text"
+                placeholder="Nombre del proveedor"
+                value={form.name}
+                onChange={e => setForm({...form, name: e.target.value})}
+                required
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#495057' }}>
+                Teléfono
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <select
+                  value={form.countryCode}
+                  onChange={e => setForm({...form, countryCode: e.target.value})}
+                  style={{
+                    width: '200px',
+                    padding: '10px 12px',
+                    border: '1px solid #ced4da',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
+                >
+                  {countries.map(country => (
+                    <option key={country.code} value={country.code}>
+                      {country.prefix} - {country.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel"
+                  placeholder="Número de teléfono"
+                  value={form.phone}
+                  onChange={e => setForm({...form, phone: e.target.value})}
+                  style={{
+                    flex: 1,
+                    padding: '10px 12px',
+                    border: '1px solid #ced4da',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <small style={{ color: '#6c757d', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                Prefijo: {getPrefix(form.countryCode)} - Se agregará automáticamente al guardar
+              </small>
+            </div>
+            <button
+              type="submit"
+              style={{
+                width: '100%',
+                padding: '12px',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#218838'}
+              onMouseOut={(e) => e.target.style.backgroundColor = '#28a745'}
+            >
+              ➕ Agregar Proveedor
+            </button>
+          </form>
+        </div>
+      </div>
 
-      {/* Tabla */}
-      <table border="1" cellPadding="6" style={{ width:'100%', borderCollapse:'collapse' }}>
-        <thead>
-          <tr>
-            <th style={{textAlign:'left'}}>Nombre</th>
-            <th style={{textAlign:'left'}}>Teléfono</th>
-            <th style={{width:220}}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map(s => (
-            <tr key={s.id}>
-              <td>
-                {editId === s.id
-                  ? <input value={editForm.name} onChange={e=>setEditForm({...editForm, name:e.target.value})}/>
-                  : s.name}
-              </td>
-              <td>
-                {editId === s.id
-                  ? <input value={editForm.phone} onChange={e=>setEditForm({...editForm, phone:e.target.value})}/>
-                  : (s.phone || '-')}
-              </td>
-              <td>
-                {editId === s.id ? (
-                  <div style={{display:'flex', gap:8}}>
-                    <button type="button" onClick={()=>saveEdit(s.id)}>Guardar</button>
-                    <button type="button" onClick={cancelEdit}>Cancelar</button>
-                  </div>
-                ) : (
-                  <div style={{display:'flex', gap:8}}>
-                    <button type="button" onClick={()=>startEdit(s)}>Editar</button>
-                    <button type="button" onClick={()=>remove(s.id)}>Eliminar</button>
-                  </div>
+      {/* Lista de proveedores */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '8px',
+        border: '1px solid #e9ecef',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        overflow: 'hidden'
+      }}>
+        <div style={{ padding: '20px', borderBottom: '1px solid #e9ecef' }}>
+          <h3 style={{ color: '#495057', margin: 0, fontSize: '18px', fontWeight: '600' }}>
+            Lista de Proveedores
+          </h3>
+        </div>
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: '#6c757d' }}>
+            Cargando proveedores...
+          </div>
+        ) : (
+          <div style={{ maxHeight: '600px', overflow: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8f9fa' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#495057', borderBottom: '2px solid #dee2e6' }}>
+                    Nombre
+                  </th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#495057', borderBottom: '2px solid #dee2e6' }}>
+                    Teléfono
+                  </th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', color: '#495057', borderBottom: '2px solid #dee2e6', width: '200px' }}>
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map(s => (
+                  <tr key={s.id} style={{ borderBottom: '1px solid #e9ecef' }}>
+                    <td style={{ padding: '12px' }}>
+                      {editId === s.id ? (
+                        <input
+                          type="text"
+                          value={editForm.name}
+                          onChange={e => setEditForm({...editForm, name: e.target.value})}
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            border: '1px solid #ced4da',
+                            borderRadius: '4px',
+                            fontSize: '14px'
+                          }}
+                        />
+                      ) : (
+                        <span style={{ fontWeight: '500', color: '#2c3e50' }}>{s.name}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      {editId === s.id ? (
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <select
+                            value={editForm.countryCode}
+                            onChange={e => setEditForm({...editForm, countryCode: e.target.value})}
+                            style={{
+                              width: '160px',
+                              padding: '6px 8px',
+                              border: '1px solid #ced4da',
+                              borderRadius: '4px',
+                              fontSize: '13px',
+                              backgroundColor: 'white'
+                            }}
+                          >
+                            {countries.map(country => (
+                              <option key={country.code} value={country.code}>
+                                {country.prefix}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="tel"
+                            value={editForm.phone}
+                            onChange={e => setEditForm({...editForm, phone: e.target.value})}
+                            placeholder="Número"
+                            style={{
+                              flex: 1,
+                              padding: '6px 8px',
+                              border: '1px solid #ced4da',
+                              borderRadius: '4px',
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <span style={{ color: '#6c757d' }}>{s.phone || '-'}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      {editId === s.id ? (
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => saveEdit(s.id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#28a745',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              fontSize: '13px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✓ Guardar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#6c757d',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              fontSize: '13px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✕ Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(s)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#007bff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              fontSize: '13px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => remove(s.id)}
+                            style={{
+                              padding: '6px 12px',
+                              backgroundColor: '#dc3545',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              fontSize: '13px',
+                              fontWeight: '500',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🗑️ Eliminar
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {!loading && list.length === 0 && (
+                  <tr>
+                    <td colSpan={3} style={{ padding: '40px', textAlign: 'center', color: '#6c757d' }}>
+                      No hay proveedores registrados.
+                    </td>
+                  </tr>
                 )}
-              </td>
-            </tr>
-          ))}
-          {!loading && list.length === 0 && (
-            <tr><td colSpan={3}>No hay proveedores.</td></tr>
-          )}
-        </tbody>
-      </table>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
