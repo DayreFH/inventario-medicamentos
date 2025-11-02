@@ -9,7 +9,6 @@ const DatosTab = ({ medicines, onRefresh, loading }) => {
     formaFarmaceutica: 'comprimidos',
     concentracion: 'mg',
     presentacion: 'blister',
-    fechaVencimiento: '',
     pesoKg: ''
   });
   const [editingId, setEditingId] = useState(null);
@@ -62,7 +61,6 @@ const DatosTab = ({ medicines, onRefresh, loading }) => {
         formaFarmaceutica: 'comprimidos',
         concentracion: 'mg',
         presentacion: 'blister',
-        fechaVencimiento: '',
         pesoKg: ''
       });
       setEditingId(null);
@@ -84,7 +82,6 @@ const DatosTab = ({ medicines, onRefresh, loading }) => {
       formaFarmaceutica: medicine.formaFarmaceutica,
       concentracion: medicine.concentracion,
       presentacion: medicine.presentacion,
-      fechaVencimiento: medicine.fechaVencimiento ? medicine.fechaVencimiento.split('T')[0] : '',
       pesoKg: medicine.pesoKg
     });
   };
@@ -98,7 +95,6 @@ const DatosTab = ({ medicines, onRefresh, loading }) => {
       formaFarmaceutica: 'comprimidos',
       concentracion: 'mg',
       presentacion: 'blister',
-      fechaVencimiento: '',
       pesoKg: ''
     });
   };
@@ -257,24 +253,6 @@ const DatosTab = ({ medicines, onRefresh, loading }) => {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#495057' }}>
-                    Fecha de Vencimiento
-                  </label>
-                  <input
-                    type="date"
-                    value={form.fechaVencimiento}
-                    onChange={(e) => setForm({...form, fechaVencimiento: e.target.value})}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #ced4da',
-                      borderRadius: '4px',
-                      fontSize: '14px'
-                    }}
-                  />
-                </div>
-
                 <div>
                   <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#495057' }}>
                     Peso (Kg)

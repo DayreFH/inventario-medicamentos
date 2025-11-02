@@ -240,6 +240,7 @@ const ReceiptFormAdvanced = () => {
 
   const handleMedicineSelect = async (medicine) => {
     setSelectedMedicine(medicine);
+    // No prellenar desde datos del medicamento; la caducidad se ingresa al dar entrada
     setCurrentItem({ ...currentItem, medicineId: medicine.id });
     
     // Cargar precios del medicamento
@@ -332,6 +333,12 @@ const ReceiptFormAdvanced = () => {
       
       if (currentItem.quantity <= 0) {
         alert('Por favor ingrese una cantidad mayor a 0');
+        return;
+      }
+
+      // Validar vencimiento obligatorio para que aparezca en reportes
+      if (!currentItem.expirationDate) {
+        alert('Por favor ingrese la fecha de vencimiento');
         return;
       }
       
@@ -523,11 +530,18 @@ const ReceiptFormAdvanced = () => {
           throw new Error(`Cantidad inválida para: ${item.nombreComercial || 'medicamento desconocido'}`);
         }
         
+        // Validación extra: fecha en formato YYYY-MM-DD
+        const exp = item.expirationDate && String(item.expirationDate).match(/^\d{4}-\d{2}-\d{2}$/)
+          ? item.expirationDate
+          : null;
+
         return {
           medicineId: medicineIdNum,
           qty: qtyNum,
           unit_cost: Number(item.unitCost || 0),
-          weight_kg: Number(item.weightKg || 0)
+          weight_kg: Number(item.weightKg || 0),
+          lot: item.lot || null,
+          expirationDate: exp
         };
       });
       

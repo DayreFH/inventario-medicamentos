@@ -136,40 +136,29 @@ const SaleFormAdvanced = () => {
   }, []);
 
   const checkExchangeRateMN = async () => {
+    const today = new Date().toDateString();
+
+    // 1) Primero, exigir que exista dato de hoy en localStorage
     try {
-      // Intentar cargar tasa MN desde la API
-      const { data } = await api.get('/exchange-rates-mn/current');
-      
-      // Guardar en localStorage con la fecha de hoy
-      const today = new Date().toDateString();
-      localStorage.setItem('exchangeRateMN', JSON.stringify({
-        date: today,
-        rate: data.sellRate // Usar tasa de venta para las ventas
-      }));
-      
-      setExchangeRateMN(data.sellRate);
-    } catch (error) {
-      // Si no hay tasa en la API, verificar localStorage
-      const today = new Date().toDateString();
       const saved = localStorage.getItem('exchangeRateMN');
-      
       if (saved) {
         const data = JSON.parse(saved);
-        if (data.date === today && data.rate) {
-          setExchangeRateMN(data.rate);
+        if (data?.date === today && data?.rate) {
+          setExchangeRateMN(parseFloat(data.rate));
           return;
         }
       }
-      
-      // Si no hay tasa configurada para hoy, pedir que la configure
-      const configure = confirm('Debe configurar la tasa de cambio en Moneda Nacional (MN) para el día de hoy. ¿Desea configurarla ahora?');
-      
-      if (configure) {
-        window.location.href = '/admin/usd-mn';
-      } else {
-        alert('No se puede continuar sin configurar la tasa de cambio MN. Por favor, configúrela en la pestaña "Tasas de Cambio MN".');
-      }
+    } catch (e) {
+      console.error('Error leyendo exchangeRateMN de localStorage:', e);
     }
+
+    // 2) Si no hay dato de hoy, solicitar configuración manual
+    const configure = confirm('Debe configurar la tasa de cambio en Moneda Nacional (MN) para el día de hoy. ¿Desea configurarla ahora?');
+    if (configure) {
+      window.location.href = '/admin/usd-mn';
+      return;
+    }
+    alert('No se puede continuar sin configurar la Tasa de Cambio MN. Por favor, configúrela en "Tasa de Cambio USD-MN".');
   };
 
   const loadInitialData = async () => {

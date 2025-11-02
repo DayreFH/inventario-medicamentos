@@ -33,20 +33,53 @@ function monthRange(ym) {               // ym = 'YYYY-MM'
 router.post('/', async (req, res) => {
   const { supplierId, date, notes, items } = req.body;
   try {
+    // Log de entrada
+    console.log('[POST /receipts] payload:', JSON.stringify({ supplierId, date, notes, items }, null, 2));
+
     const result = await prisma.$transaction(async (tx) => {
       const receipt = await tx.receipt.create({
         data: { supplierId, date: new Date(`${date}T00:00:00`), notes: notes ?? null }
       });
       for (const it of items) {
-        await tx.receiptItem.create({
-          data: {
-            receiptId: receipt.id,
-            medicineId: it.medicineId,
-            qty: it.qty,
-            unitCost: Number(it.unit_cost ?? 0),
-            weightKg: Number(it.weight_kg ?? it.weightKg ?? 0)
+        console.log(`📦 Procesando item - Medicine ID: ${it.medicineId}`);
+        console.log(`   expirationDate recibido:`, it.expirationDate);
+        console.log(`   Tipo:`, typeof it.expirationDate);
+        
+        const baseData = {
+          receiptId: receipt.id,
+          medicineId: it.medicineId,
+          qty: it.qty,
+          unitCost: Number(it.unit_cost ?? 0),
+          weightKg: Number(it.weight_kg ?? it.weightKg ?? 0)
+        };
+        let dataToCreate = { ...baseData };
+        if (typeof it.lot !== 'undefined') dataToCreate.lot = it.lot ?? null;
+        
+        if (it.expirationDate && /^\d{4}-\d{2}-\d{2}$/.test(String(it.expirationDate))) {
+          dataToCreate.expirationDate = new Date(`${it.expirationDate}T00:00:00`);
+          console.log(`   ✅ Fecha válida, guardando:`, dataToCreate.expirationDate);
+        } else {
+          console.log(`   ❌ Fecha NO válida o vacía. Valor:`, it.expirationDate);
+        }
+        try {
+          await tx.receiptItem.create({ data: dataToCreate });
+          console.log(`   ✅ Item guardado exitosamente`);
+        } catch (err) {
+          const msg = String(err?.message || '');
+          console.warn('[POST /receipts] retry without optional fields due to:', msg);
+          if (msg.includes('Unknown argument') || msg.includes('Unknown arg')) {
+            // Retry sin el campo 'lot' pero manteniendo expirationDate si existe
+            const retryData = { ...baseData };
+            if (dataToCreate.expirationDate) {
+              retryData.expirationDate = dataToCreate.expirationDate;
+              console.log(`   🔄 Retry CON expirationDate:`, retryData.expirationDate);
+            }
+            await tx.receiptItem.create({ data: retryData });
+            console.log(`   ✅ Item guardado en retry (sin campo 'lot')`);
+          } else {
+            throw err;
           }
-        });
+        }
         await tx.medicine.update({
           where: { id: it.medicineId },
           data: { stock: { increment: it.qty } }
@@ -56,6 +89,7 @@ router.post('/', async (req, res) => {
     });
     res.status(201).json({ ok: true, id: result.id });
   } catch (e) {
+    console.error('[POST /receipts] error:', e);
     res.status(400).json({ error: 'No se pudo registrar la entrada', detail: e.message });
   }
 });
@@ -70,6 +104,7 @@ router.put('/:id', async (req, res) => {
   const { supplierId, date, notes, items } = req.body;
 
   try {
+    console.log('[PUT /receipts/:id] payload:', JSON.stringify({ id, supplierId, date, notes, items }, null, 2));
     await prisma.$transaction(async (tx) => {
       // Items actuales
       const prevItems = await tx.receiptItem.findMany({
@@ -113,18 +148,47 @@ router.put('/:id', async (req, res) => {
         }
       }
 
-      // Reemplazar items (incluye unit_cost)
+      // Reemplazar items
       await tx.receiptItem.deleteMany({ where: { receiptId: id } });
       if (items.length) {
-        await tx.receiptItem.createMany({
-          data: items.map(it => ({
-            receiptId: id,
-            medicineId: it.medicineId,
-            qty: it.qty,
-            unit_cost: Number(it.unit_cost ?? 0),
-            weightKg: Number(it.weight_kg ?? it.weightKg ?? 0) 
-          }))
-        });
+        const payload = items.map(it => ({
+          receiptId: id,
+          medicineId: it.medicineId,
+          qty: it.qty,
+          unitCost: Number(it.unit_cost ?? 0),
+          weightKg: Number(it.weight_kg ?? it.weightKg ?? 0),
+          ...(typeof it.lot !== 'undefined' ? { lot: it.lot ?? null } : {}),
+          ...(it.expirationDate && /^\d{4}-\d{2}-\d{2}$/.test(String(it.expirationDate))
+            ? { expirationDate: new Date(`${it.expirationDate}T00:00:00`) }
+            : {})
+        }));
+        try {
+          await tx.receiptItem.createMany({ data: payload });
+        } catch (err) {
+          const msg = String(err?.message || '');
+          console.warn('[PUT /receipts/:id] fallback due to:', msg);
+          if (msg.includes('Unknown argument') || msg.includes('Unknown arg')) {
+            // Retry sin el campo 'lot' pero manteniendo expirationDate si existe
+            for (const it of items) {
+              const retryData = {
+                receiptId: id,
+                medicineId: it.medicineId,
+                qty: it.qty,
+                unitCost: Number(it.unit_cost ?? 0),
+                weightKg: Number(it.weight_kg ?? it.weightKg ?? 0)
+              };
+              
+              // Agregar expirationDate si existe y es válida
+              if (it.expirationDate && /^\d{4}-\d{2}-\d{2}$/.test(String(it.expirationDate))) {
+                retryData.expirationDate = new Date(`${it.expirationDate}T00:00:00`);
+              }
+              
+              await tx.receiptItem.create({ data: retryData });
+            }
+          } else {
+            throw err;
+          }
+        }
       }
 
       // Actualizar cabecera
@@ -143,6 +207,7 @@ router.put('/:id', async (req, res) => {
     if (e?.code === 'STOCK_NEGATIVE') {
       return res.status(409).json({ error: 'No se puede editar la entrada', detail: e.message });
     }
+    console.error('[PUT /receipts/:id] error:', e);
     res.status(400).json({ error: 'No se pudo editar la entrada', detail: e.message });
   }
 });

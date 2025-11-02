@@ -6,41 +6,29 @@ import api from '../api/http';
  * @returns {Promise<number|null>} El % de utilidad actual o null si no está configurado
  */
 export const checkUtilityRate = async () => {
+  const today = new Date().toDateString();
+
+  // 1) Prioridad: exigir dato del día desde localStorage
   try {
-    // Intentar cargar % de utilidad desde la API
-    const { data } = await api.get('/utility-rates/current');
-    
-    // Guardar en localStorage con la fecha de hoy
-    const today = new Date().toDateString();
-    localStorage.setItem('utilityRate', JSON.stringify({
-      date: today,
-      rate: data.utilityPercentage
-    }));
-    
-    return data.utilityPercentage;
-  } catch (error) {
-    // Si no hay % de utilidad en la API, verificar localStorage
-    const today = new Date().toDateString();
     const saved = localStorage.getItem('utilityRate');
-    
     if (saved) {
       const data = JSON.parse(saved);
-      if (data.date === today && data.rate) {
+      if (data?.date === today && data?.rate) {
         return data.rate;
       }
     }
-    
-    // Si no hay % de utilidad configurado para hoy, pedir que lo configure
-    const configure = confirm('Debe configurar el % de utilidad para el día de hoy. ¿Desea configurarlo ahora?');
-    
-    if (configure) {
-      window.location.href = '/admin/utility';
-      return null;
-    } else {
-      alert('No se puede continuar sin configurar el % de utilidad. Por favor, configúrelo en la pestaña "% de Utilidad".');
-      return null;
-    }
+  } catch (e) {
+    console.error('Error leyendo utilityRate de localStorage:', e);
   }
+
+  // 2) Si no hay dato de hoy, pedir configuración manual
+  const configure = confirm('Debe configurar el % de utilidad para el día de hoy. ¿Desea configurarlo ahora?');
+  if (configure) {
+    window.location.href = '/admin/utility';
+    return null;
+  }
+  alert('No se puede continuar sin configurar el % de utilidad. Por favor, configúrelo en la pestaña "% de Utilidad".');
+  return null;
 };
 
 /**

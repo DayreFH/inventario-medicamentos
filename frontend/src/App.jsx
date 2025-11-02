@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Navigation from './components/Navigation';
 import Dashboard from './pages/Dashboard';
+import FinanceReports from './pages/FinanceReports';
+import Home from './pages/Home';
 import Medicines from './pages/Medicines';
 import Suppliers from './pages/Suppliers';
 import Customers from './pages/Customers';
@@ -32,10 +34,14 @@ export default function App() {
           maxHeight: 'calc(100vh - 32px)'
         }}>
           <Routes>
+            {/* INICIO */}
+            <Route path="/" element={<Home/>}/>
             {/* PANEL DE DATOS */}
-            <Route path="/" element={<Dashboard/>}/>
+            <Route path="/dashboard" element={<Dashboard/>}/>
             <Route path="/top-customers" element={<Dashboard/>}/>
             <Route path="/best-prices" element={<Dashboard/>}/>
+            <Route path="/expiry-alerts" element={<Dashboard/>}/>
+            <Route path="/idle-medicines" element={<Dashboard/>}/>
             
             {/* ADMINISTRACIÓN */}
             <Route path="/admin/dop-usd" element={<ExchangeRates/>}/>
@@ -53,7 +59,7 @@ export default function App() {
             <Route path="/sales" element={<Sales/>}/>
             
             {/* FINANZAS */}
-            <Route path="/finances" element={<div><h2>Finanzas</h2><p>Módulo en desarrollo...</p></div>}/>
+            <Route path="/finanzas/reportes" element={<FinanceReports/>}/>
           </Routes>
         </main>
       </div>

@@ -16,6 +16,10 @@ export default function Dashboard() {
   const [low, setLow] = useState([]);
   const [top, setTop] = useState([]);
   const [supplierSuggestions, setSupplierSuggestions] = useState([]);
+  const [idle, setIdle] = useState([]);
+  const [expiry, setExpiry] = useState([]); // vencidos
+  const [expiryUpcoming, setExpiryUpcoming] = useState([]); // próximos a vencer
+  const [expiryTab, setExpiryTab] = useState('expired'); // 'expired' | 'upcoming'
   const [loading, setLoading] = useState(true);
   const location = useLocation();
 
@@ -25,10 +29,13 @@ export default function Dashboard() {
         setLoading(true);
         
         // Cargar otras peticiones en paralelo
-        const [lowStockResponse, topCustomersResponse, supplierSuggestionsResponse] = await Promise.allSettled([
+        const [lowStockResponse, topCustomersResponse, supplierSuggestionsResponse, idleMedicinesResponse, expiryAlertsResponse, expiryUpcomingResponse] = await Promise.allSettled([
           api.get('/reports/low-stock'),
           api.get('/reports/top-customers'),
-          api.get('/reports/supplier-suggestions')
+          api.get('/reports/supplier-suggestions'),
+          api.get('/reports/idle-medicines'),
+          api.get('/reports/expiry-alerts'),
+          api.get('/reports/expiry-upcoming')
         ]);
         
         // Procesar respuestas exitosas
@@ -36,6 +43,19 @@ export default function Dashboard() {
           setLow(lowStockResponse.value.data);
         } else {
           console.error('❌ Error cargando stock bajo:', lowStockResponse.reason);
+        }
+        if (expiryUpcomingResponse.status === 'fulfilled') {
+          setExpiryUpcoming(expiryUpcomingResponse.value.data || []);
+        } else {
+          console.error('❌ Error cargando próximos a caducar:', expiryUpcomingResponse.reason);
+          setExpiryUpcoming([]);
+        }
+        
+        if (expiryAlertsResponse.status === 'fulfilled') {
+          setExpiry(expiryAlertsResponse.value.data || []);
+        } else {
+          console.error('❌ Error cargando alertas de caducidad:', expiryAlertsResponse.reason);
+          setExpiry([]);
         }
         
         if (topCustomersResponse.status === 'fulfilled') {
@@ -52,6 +72,13 @@ export default function Dashboard() {
           console.error('❌ Error cargando sugerencias:', supplierSuggestionsResponse.reason);
           console.error('❌ Error response:', supplierSuggestionsResponse.reason?.response?.data);
           setSupplierSuggestions([]);
+        }
+        // Guardar idle en estado temporal si hiciera falta a futuro (se puede leer directo en cada caso con fetch propio)
+        if (idleMedicinesResponse.status === 'fulfilled') {
+          setIdle(idleMedicinesResponse.value.data || []);
+        } else {
+          console.error('❌ Error cargando tiempo sin movimiento:', idleMedicinesResponse.reason);
+          setIdle([]);
         }
         
       } catch (error) {
@@ -270,6 +297,85 @@ export default function Dashboard() {
           </div>
         );
       }
+      case '/expiry-alerts': {
+        const dataList = expiryTab === 'expired' ? expiry : expiryUpcoming;
+        const hasList = Array.isArray(dataList) && dataList.length > 0;
+        const labels = hasList ? dataList.slice(0, 8).map(e => e.medicineCode || e.medicineName || e.medicineId) : [];
+        const values = hasList ? dataList.slice(0, 8).map(e => Math.max(0, e.daysUntilExpiry)) : [];
+        const expiryChartData = {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: ['#feca57','#ff6b6b','#48dbfb','#1dd1a1','#5f27cd','#ff9ff3','#01a3a4','#576574'],
+            borderColor: ['#d68910','#c0392b','#0e6251','#145a32','#512e5f','#9b59b6','#0b5345','#2c3e50'],
+            borderWidth: 2
+          }]
+        };
+
+        return (
+          <div>
+            <div style={{ marginBottom: '32px' }}>
+              <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '28px', fontWeight: '600', marginBottom: '8px' }}>
+                Alertas de Caducidad
+              </h1>
+              <p style={{ color: '#6c757d', margin: 0 }}>
+                Basado en el tiempo de caducidad configurado por medicamento
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: hasList ? '1fr 400px' : '1fr', gap: '24px', alignItems: 'start' }}>
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e9ecef', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                <div style={{ padding: '12px', borderBottom: '1px solid #e9ecef', backgroundColor: '#f8f9fa', display: 'flex', gap: 8 }}>
+                  <button onClick={() => setExpiryTab('expired')} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #dee2e6', background: expiryTab === 'expired' ? '#0d6efd' : '#fff', color: expiryTab === 'expired' ? '#fff' : '#2c3e50', cursor: 'pointer' }}>Vencidos</button>
+                  <button onClick={() => setExpiryTab('upcoming')} style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid #dee2e6', background: expiryTab === 'upcoming' ? '#0d6efd' : '#fff', color: expiryTab === 'upcoming' ? '#fff' : '#2c3e50', cursor: 'pointer' }}>Próximos a vencer</button>
+                </div>
+                {loading ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6c757d' }}>Cargando alertas...</div>
+                ) : !hasList ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6c757d' }}>No hay alertas de caducidad</div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8f9fa' }}>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Medicamento</th>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Stock</th>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Fecha vencimiento</th>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Días restantes</th>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Umbral (días)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dataList.map(e => (
+                        <tr key={e.medicineId} style={{ borderBottom: '1px solid #e9ecef' }}>
+                          <td style={{ padding: '12px' }}>
+                            <div style={{ fontWeight: 500, color: '#2c3e50' }}>{e.medicineCode}</div>
+                            <div style={{ fontSize: 12, color: '#6c757d' }}>{e.medicineName}</div>
+                          </td>
+                          <td style={{ padding: '12px' }}>{e.stock}</td>
+                          <td style={{ padding: '12px' }}>{e.expiryDate ? new Date(e.expiryDate).toLocaleDateString('es-DO') : '—'}</td>
+                          <td style={{ padding: '12px', fontWeight: 700, color: (e.daysUntilExpiry ?? 9999) <= 0 ? '#dc3545' : '#ff9800' }}>
+                            {e.daysUntilExpiry ?? '—'}
+                          </td>
+                          <td style={{ padding: '12px' }}>{e.thresholdDays}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {hasList && (
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e9ecef', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24, position: 'sticky', top: 24 }}>
+                  <h3 style={{ color: '#495057', marginBottom: 20, fontSize: 16, fontWeight: 600, textAlign: 'center' }}>Próximos a caducar (días)</h3>
+                  <div style={{ width: 350, height: 350 }}>
+                    <Doughnut data={expiryChartData} options={{ responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 12 } } } } }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
       case '/top-customers': {
         const hasTop = Array.isArray(top) && top.length > 0;
         const top10 = hasTop ? top.slice(0, 10) : [];
@@ -388,6 +494,92 @@ export default function Dashboard() {
                         }
                       }}
                     />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+      case '/idle-medicines': {
+        const hasIdle = Array.isArray(idle) && idle.length > 0;
+        const labels = hasIdle ? idle.slice(0, 8).map(i => i.medicineCode || i.medicineName || i.medicineId) : [];
+        const values = hasIdle ? idle.slice(0, 8).map(i => i.daysIdle) : [];
+        const idleChartData = {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: ['#ff6b6b','#feca57','#48dbfb','#1dd1a1','#5f27cd','#ff9ff3','#01a3a4','#576574'],
+            borderColor: ['#c0392b','#d68910','#0e6251','#145a32','#512e5f','#9b59b6','#0b5345','#2c3e50'],
+            borderWidth: 2
+          }]
+        };
+        return (
+          <div>
+            <div style={{ marginBottom: '32px' }}>
+              <h1 style={{ color: '#2c3e50', margin: 0, fontSize: '28px', fontWeight: '600', marginBottom: '8px' }}>
+                Tiempo sin movimiento
+              </h1>
+              <p style={{ color: '#6c757d', margin: 0 }}>
+                Medicamentos que superan el umbral de días configurado sin movimiento
+              </p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: hasIdle ? '1fr 400px' : '1fr', gap: '24px', alignItems: 'start' }}>
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e9ecef', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                {loading ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6c757d' }}>Cargando...</div>
+                ) : !hasIdle ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6c757d' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+                    <h3 style={{ color: '#28a745', marginBottom: '8px', fontWeight: '600' }}>Sin alertas de inactividad</h3>
+                    <p style={{ color: '#6c757d', fontSize: '14px' }}>Ningún medicamento supera el umbral de días sin movimiento configurado</p>
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f8f9fa' }}>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Medicamento</th>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Stock</th>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Último movimiento</th>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Días sin movimiento</th>
+                        <th style={{ padding: '12px', textAlign: 'left' }}>Umbral (días)</th>
+                        <th style={{ padding: '12px', textAlign: 'center' }}>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {idle.map(i => (
+                        <tr key={i.medicineId} style={{ borderBottom: '1px solid #e9ecef' }}>
+                          <td style={{ padding: '12px' }}>
+                            <div style={{ fontWeight: 500, color: '#2c3e50' }}>{i.medicineCode}</div>
+                            <div style={{ fontSize: 12, color: '#6c757d' }}>{i.medicineName}</div>
+                          </td>
+                          <td style={{ padding: '12px' }}>{i.stock}</td>
+                          <td style={{ padding: '12px' }}>{new Date(i.lastMovementDate).toLocaleDateString('es-DO')}</td>
+                          <td style={{ padding: '12px', fontWeight: 700, color: '#dc3545' }}>{i.daysIdle}</td>
+                          <td style={{ padding: '12px', color: '#6c757d' }}>{i.thresholdDays || 90}</td>
+                          <td style={{ padding: '12px', textAlign: 'center' }}>
+                            <span style={{
+                              backgroundColor: i.daysIdle >= (i.thresholdDays || 90) * 2 ? '#dc3545' : '#ff9800',
+                              color: 'white',
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: '500'
+                            }}>
+                              {i.daysIdle >= (i.thresholdDays || 90) * 2 ? '⚠️ CRÍTICO' : '⚡ ALERTA'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              {hasIdle && (
+                <div style={{ backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e9ecef', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', padding: 24, position: 'sticky', top: 24 }}>
+                  <h3 style={{ color: '#495057', marginBottom: 20, fontSize: 16, fontWeight: 600, textAlign: 'center' }}>Top inactivos (días)</h3>
+                  <div style={{ width: 350, height: 350 }}>
+                    <Doughnut data={idleChartData} options={{ responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 12 } } } } }} />
                   </div>
                 </div>
               )}

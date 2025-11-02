@@ -74,7 +74,7 @@ router.get('/history', async (req, res) => {
         source: rate.source,
         date: rate.date,
         isActive: rate.isActive,
-        createdAt: rate.created_at
+        created_at: rate.created_at
       }))
     });
   } catch (error) {
