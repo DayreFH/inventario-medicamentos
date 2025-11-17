@@ -8,21 +8,43 @@ const Medicines = () => {
   const [activeTab, setActiveTab] = useState('datos');
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false
+  });
 
   useEffect(() => {
-    loadMedicines();
+    loadMedicines(1);
   }, []);
 
-  const loadMedicines = async () => {
+  const loadMedicines = async (page = 1) => {
     try {
       setLoading(true);
-      const { data } = await api.get('/medicines');
-      setMedicines(data);
+      const { data } = await api.get(`/medicines?page=${page}&limit=20`);
+      setMedicines(data.data || data); // Soporta ambos formatos
+      setPagination(data.pagination || {
+        page: 1,
+        limit: 20,
+        total: Array.isArray(data) ? data.length : data.data?.length || 0,
+        totalPages: 1,
+        hasNext: false,
+        hasPrev: false
+      });
     } catch (error) {
       console.error('Error cargando medicamentos:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > pagination.totalPages) return;
+    loadMedicines(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const tabs = [
@@ -58,12 +80,67 @@ const Medicines = () => {
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          color: '#6c757d',
-          fontSize: '14px'
+          gap: '16px'
         }}>
-          <span>📊</span>
-          <span>{medicines.length} medicamentos registrados</span>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: '#6c757d',
+            fontSize: '14px'
+          }}>
+            <span>📊</span>
+            <span>{pagination.total} medicamentos registrados</span>
+          </div>
+          
+          {/* Controles de paginación */}
+          {pagination.totalPages > 1 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              backgroundColor: '#f8f9fa',
+              borderRadius: '6px',
+              border: '1px solid #e9ecef'
+            }}>
+              <button
+                onClick={() => handlePageChange(pagination.page - 1)}
+                disabled={!pagination.hasPrev}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: pagination.hasPrev ? '#007bff' : '#e9ecef',
+                  color: pagination.hasPrev ? 'white' : '#6c757d',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: pagination.hasPrev ? 'pointer' : 'not-allowed',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}
+              >
+                ← Anterior
+              </button>
+              <span style={{ fontSize: '13px', color: '#495057', fontWeight: '500' }}>
+                Página {pagination.page} de {pagination.totalPages}
+              </span>
+              <button
+                onClick={() => handlePageChange(pagination.page + 1)}
+                disabled={!pagination.hasNext}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: pagination.hasNext ? '#007bff' : '#e9ecef',
+                  color: pagination.hasNext ? 'white' : '#6c757d',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: pagination.hasNext ? 'pointer' : 'not-allowed',
+                  fontSize: '12px',
+                  fontWeight: '500'
+                }}
+              >
+                Siguiente →
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -128,13 +205,13 @@ const Medicines = () => {
         flexDirection: 'column'
       }}>
         {activeTab === 'datos' && (
-          <DatosTab medicines={medicines} onRefresh={loadMedicines} loading={loading} />
+          <DatosTab medicines={medicines} onRefresh={() => loadMedicines(pagination.page)} loading={loading} />
         )}
         {activeTab === 'precios' && (
-          <PreciosTab medicines={medicines} onRefresh={loadMedicines} loading={loading} />
+          <PreciosTab medicines={medicines} onRefresh={() => loadMedicines(pagination.page)} loading={loading} />
         )}
         {activeTab === 'parametros' && (
-          <ParametrosTab medicines={medicines} onRefresh={loadMedicines} loading={loading} />
+          <ParametrosTab medicines={medicines} onRefresh={() => loadMedicines(pagination.page)} loading={loading} />
         )}
       </div>
     </div>

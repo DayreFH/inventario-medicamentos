@@ -13,6 +13,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  admin
+  user
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String    // Contraseña hasheada con bcrypt
+  name      String
+  role      UserRole  @default(user)
+  isActive  Boolean   @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([email])
+  @@map("users")
+}
+
 model Supplier {
   id        Int       @id @default(autoincrement())
   name      String
@@ -82,6 +101,9 @@ model Medicine {
   receiptItems          ReceiptItem[]
   saleItems             SaleItem[]
 
+  @@index([nombreComercial])
+  @@index([fechaVencimiento])
+  @@index([stock])
   @@map("medicines")
 }
 
@@ -126,6 +148,9 @@ model Receipt {
   notes      String?
   created_at DateTime  @default(now())
   items      ReceiptItem[]
+
+  @@index([date])
+  @@index([supplierId, date])
 }
 
 model ReceiptItem {
@@ -152,6 +177,9 @@ model Sale {
   notes      String?
   created_at DateTime  @default(now())
   items      SaleItem[]
+
+  @@index([date])
+  @@index([customerId, date])
 }
 
 model SaleItem {

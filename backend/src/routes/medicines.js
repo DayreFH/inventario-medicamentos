@@ -21,36 +21,60 @@ function calcularPrecioVenta(precioCompra, margenUtilidad) {
 
 /**
  * GET /api/medicines
- * Lista medicamentos con sus precios y parámetros
+ * Lista medicamentos con sus precios y parámetros (con paginación)
+ * Query params: ?q=busqueda&page=1&limit=20
  */
 router.get('/', async (req, res) => {
   const q = (req.query.q || '').trim();
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
+  
   try {
-    const data = await prisma.medicine.findMany({
-      where: q ? { 
-        OR: [
-          { nombreComercial: { contains: q } },
-          { nombreGenerico: { contains: q } },
-          { codigo: { contains: q } }
-        ]
-      } : undefined,
-      include: {
-        precios: { 
-          where: { activo: true },
-          include: {
-            supplier: {
-              select: {
-                id: true,
-                name: true
+    const where = q ? { 
+      OR: [
+        { nombreComercial: { contains: q } },
+        { nombreGenerico: { contains: q } },
+        { codigo: { contains: q } }
+      ]
+    } : undefined;
+
+    // Consultas en paralelo: datos + conteo total
+    const [data, total] = await Promise.all([
+      prisma.medicine.findMany({
+        where,
+        include: {
+          precios: { 
+            where: { activo: true },
+            include: {
+              supplier: {
+                select: {
+                  id: true,
+                  name: true
+                }
               }
             }
-          }
+          },
+          parametros: true
         },
-        parametros: true
-      },
-      orderBy: { nombreComercial: 'asc' },
+        orderBy: { nombreComercial: 'asc' },
+        skip: skip,
+        take: limit
+      }),
+      prisma.medicine.count({ where })
+    ]);
+
+    res.json({
+      data: data,
+      pagination: {
+        page: page,
+        limit: limit,
+        total: total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
+      }
     });
-    res.json(data);
   } catch (e) {
     res.status(500).json({ error: 'No se pudo listar medicamentos', detail: e.message });
   }

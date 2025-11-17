@@ -213,11 +213,15 @@ router.put('/:id', async (req, res) => {
 });
 
 /**
- * Listar entradas con filtros
- * GET /api/receipts?...&q=nombreMed
+ * Listar entradas con filtros (con paginación)
+ * GET /api/receipts?page=1&limit=20&day=YYYY-MM-DD&supplierId=N&q=nombreMed
  */
 router.get('/', async (req, res) => {
   const { day, week, month, from, to, supplierId, q } = req.query;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
+  
   const where = {};
   if (supplierId) where.supplierId = Number(supplierId);
 
@@ -236,18 +240,41 @@ router.get('/', async (req, res) => {
     if (to) where.date.lte = new Date(`${to}T23:59:59.999`);
   }
 
-  const data = await prisma.receipt.findMany({
-    where: {
-      ...where,
-      ...(q ? { items: { some: { medicine: { name: { contains: String(q) } } } } } : {})
-    },
-    orderBy: { date: 'desc' },
-    include: {
-      supplier: true,
-      items: { include: { medicine: true } } // unit_cost viene en cada item
-    }
-  });
-  res.json(data);
+  const whereClause = {
+    ...where,
+    ...(q ? { items: { some: { medicine: { nombreComercial: { contains: String(q) } } } } } : {})
+  };
+
+  try {
+    // Consultas en paralelo: datos + conteo total
+    const [data, total] = await Promise.all([
+      prisma.receipt.findMany({
+        where: whereClause,
+        orderBy: { date: 'desc' },
+        include: {
+          supplier: true,
+          items: { include: { medicine: true } }
+        },
+        skip: skip,
+        take: limit
+      }),
+      prisma.receipt.count({ where: whereClause })
+    ]);
+
+    res.json({
+      data: data,
+      pagination: {
+        page: page,
+        limit: limit,
+        total: total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'No se pudo listar entradas', detail: e.message });
+  }
 });
 
 /**

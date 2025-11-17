@@ -141,11 +141,15 @@ router.put('/:id', async (req, res) => {
 });
 
 /**
- * Listar salidas con filtros
- * GET /api/sales?day=YYYY-MM-DD&week=YYYY-MM-DD&month=YYYY-MM&from=YYYY-MM-DD&to=YYYY-MM-DD&customerId=#&q=nombreMed
+ * Listar salidas con filtros (con paginación)
+ * GET /api/sales?page=1&limit=20&day=YYYY-MM-DD&customerId=#&q=nombreMed
  */
 router.get('/', async (req, res) => {
   const { day, week, month, from, to, customerId, q } = req.query;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const skip = (page - 1) * limit;
+  
   const where = {};
   if (customerId) where.customerId = Number(customerId);
 
@@ -164,18 +168,41 @@ router.get('/', async (req, res) => {
     if (to) where.date.lte = new Date(`${to}T23:59:59.999`);
   }
 
-  const data = await prisma.sale.findMany({
-    where: {
-      ...where,
-      ...(q ? { items: { some: { medicine: { name: { contains: String(q) } } } } } : {})
-    },
-    orderBy: { date: 'desc' },
-    include: {
-      customer: true,
-      items: { include: { medicine: true } }
-    }
-  });
-  res.json(data);
+  const whereClause = {
+    ...where,
+    ...(q ? { items: { some: { medicine: { nombreComercial: { contains: String(q) } } } } } : {})
+  };
+
+  try {
+    // Consultas en paralelo: datos + conteo total
+    const [data, total] = await Promise.all([
+      prisma.sale.findMany({
+        where: whereClause,
+        orderBy: { date: 'desc' },
+        include: {
+          customer: true,
+          items: { include: { medicine: true } }
+        },
+        skip: skip,
+        take: limit
+      }),
+      prisma.sale.count({ where: whereClause })
+    ]);
+
+    res.json({
+      data: data,
+      pagination: {
+        page: page,
+        limit: limit,
+        total: total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'No se pudo listar ventas', detail: e.message });
+  }
 });
 
 /**

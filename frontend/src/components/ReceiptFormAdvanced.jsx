@@ -213,8 +213,8 @@ const ReceiptFormAdvanced = () => {
 
   const loadMedicines = async () => {
     try {
-      const { data } = await api.get('/medicines');
-      setMedicines(data);
+      const { data } = await api.get('/medicines?limit=1000');  // Cargar todos para el formulario
+      setMedicines(data.data || data);  // ✅ Soporta ambos formatos (con y sin paginación)
     } catch (error) {
       console.error('Error cargando medicamentos:', error);
     }

@@ -239,10 +239,11 @@ const SaleFormAdvanced = () => {
 
   const loadMedicines = async () => {
     try {
-      const { data } = await api.get('/medicines');
-      console.log('Medicamentos cargados:', data.length);
-      console.log('Primeros medicamentos:', data.slice(0, 3));
-      setMedicines(data);
+      const { data } = await api.get('/medicines?limit=1000');  // Cargar todos para el formulario
+      const medicines = data.data || data;  // ✅ Soporta ambos formatos (con y sin paginación)
+      console.log('Medicamentos cargados:', medicines.length);
+      console.log('Primeros medicamentos:', medicines.slice(0, 3));
+      setMedicines(medicines);
     } catch (error) {
       console.error('Error cargando medicamentos:', error);
     }
