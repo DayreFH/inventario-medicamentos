@@ -1,12 +1,127 @@
-# React + Vite
+# 💊 Sistema de Inventario de Medicamentos - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web React para el sistema de gestión de inventario de medicamentos.
 
-Currently, two official plugins are available:
+## 🚀 Tecnologías
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **React** 19.x
+- **Vite** 7.x
+- **React Router** 7.x
+- **TanStack Query** 5.x
+- **Chart.js** 4.x
+- **Axios** 1.x
 
-## Expanding the ESLint configuration
+## 📋 Requisitos
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- Node.js v20.19.0 o superior
+- npm v10.x o superior
+
+## 🔧 Instalación
+
+```bash
+# Instalar dependencias
+npm install
+```
+
+## ⚙️ Configuración
+
+Crea un archivo `.env` en la raíz del proyecto:
+
+```env
+VITE_API_URL=http://localhost:4000/api
+```
+
+Para producción, usa la URL de tu backend desplegado:
+
+```env
+VITE_API_URL=https://tu-backend.railway.app/api
+```
+
+## 🏃 Ejecutar
+
+```bash
+# Modo desarrollo
+npm run dev
+
+# Compilar para producción
+npm run build
+
+# Preview de producción
+npm run preview
+```
+
+## 📁 Estructura
+
+```
+frontend/
+├── src/
+│   ├── api/           # Configuración de API
+│   ├── components/     # Componentes reutilizables
+│   ├── contexts/       # Contextos de React
+│   ├── pages/          # Páginas de la aplicación
+│   └── utils/          # Utilidades
+├── public/             # Archivos estáticos
+└── vite.config.js      # Configuración de Vite
+```
+
+## 🎨 Páginas
+
+- `/` - Home
+- `/login` - Inicio de sesión
+- `/dashboard` - Dashboard principal
+- `/medicines` - Gestión de medicamentos
+- `/suppliers` - Proveedores
+- `/customers` - Clientes
+- `/receipts` - Recibos de compra
+- `/sales` - Ventas
+- `/reports` - Reportes financieros
+- `/exchange-rates` - Tasas de cambio
+- `/exchange-rates-mn` - Tasas de cambio MN
+- `/shipping-rates` - Tasas de envío
+- `/utility-rates` - Tasas de utilidad
+
+## 🔒 Autenticación
+
+La aplicación usa JWT para autenticación. El token se almacena en `localStorage` y se envía automáticamente en todas las peticiones.
+
+## 🚀 Deployment
+
+### Railway
+
+Este proyecto está configurado para Railway. Ver `railway.json` para detalles.
+
+1. Conecta tu repositorio a Railway
+2. Configura la variable `VITE_API_URL` con la URL de tu backend
+3. Railway detectará automáticamente la configuración
+
+### Vercel
+
+También puedes usar Vercel. Ver `vercel.json` para detalles.
+
+1. Conecta tu repositorio a Vercel
+2. Configura la variable `VITE_API_URL`
+3. Vercel desplegará automáticamente
+
+### Variables de Entorno en Producción
+
+```env
+VITE_API_URL=https://tu-backend.railway.app/api
+```
+
+## 📚 Scripts Disponibles
+
+```bash
+npm run dev      # Desarrollo
+npm run build    # Compilar para producción
+npm run preview  # Preview de producción
+npm run lint     # Linter
+```
+
+## 🔗 Backend
+
+El backend de esta aplicación está en un repositorio separado:
+- Repositorio Backend: `inventario-medicamentos-backend`
+
+## 📄 Licencia
+
+Privado - Uso interno
