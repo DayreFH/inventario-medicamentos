@@ -11,6 +11,7 @@ Sistema completo de gestión de inventario de medicamentos con frontend React y 
 | Guía | Descripción | Tiempo | Dificultad |
 |------|-------------|--------|------------|
 | **[DEPLOYMENT-RESUMEN.md](./DEPLOYMENT-RESUMEN.md)** | ⭐ **Empieza aquí** - Resumen ejecutivo | 5 min lectura | ⭐☆☆☆☆ |
+| **[RAILWAY-SEPARADO.md](./RAILWAY-SEPARADO.md)** | 🚂 **Railway separado** - Backend y Frontend independientes | 30-40 min | ⭐⭐☆☆☆ |
 | **[README-DEPLOYMENT.md](./README-DEPLOYMENT.md)** | Guía rápida Railway + Vercel | 20-30 min | ⭐⭐☆☆☆ |
 | **[DEPLOYMENT-GUIDE.md](./DEPLOYMENT-GUIDE.md)** | Guía completa con todas las opciones | 30-60 min | ⭐⭐⭐☆☆ |
 | **[HOSTING-DOMINICANA.md](./HOSTING-DOMINICANA.md)** | Opciones de hosting en RD | Variable | ⭐⭐⭐⭐☆ |
@@ -18,7 +19,20 @@ Sistema completo de gestión de inventario de medicamentos con frontend React y 
 
 ---
 
-## 🎯 OPCIÓN RECOMENDADA: Railway + Vercel
+## 🎯 OPCIONES DE DEPLOYMENT
+
+### **Opción 1: Railway Separado (Backend + Frontend)** 🚂
+
+**✅ Ventajas:**
+- Todo en Railway (un solo proveedor)
+- Backend y Frontend en proyectos separados
+- Escalado independiente
+- SSL automático (HTTPS)
+- Despliegue en 30-40 minutos
+
+**📖 Lee:** [RAILWAY-SEPARADO.md](./RAILWAY-SEPARADO.md)
+
+### **Opción 2: Railway + Vercel** ⭐
 
 **✅ Ventajas:**
 - 100% Gratis para empezar
